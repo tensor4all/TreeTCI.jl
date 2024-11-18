@@ -1,4 +1,4 @@
-module T4ATemplate
+module TreeTCI
 
 greet() = print("Hello World!")
 

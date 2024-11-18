@@ -1,14 +1,14 @@
-using T4ATemplate
+using TreeTCI
 using Documenter
 
-DocMeta.setdocmeta!(T4ATemplate, :DocTestSetup, :(using T4ATemplate); recursive=true)
+DocMeta.setdocmeta!(TreeTCI, :DocTestSetup, :(using TreeTCI); recursive=true)
 
 makedocs(;
-    modules=[T4ATemplate],
+    modules=[TreeTCI],
     authors="H. Shinaoka <h.shinaoka@gmail.com>",
-    sitename="T4ATemplate.jl",
+    sitename="TreeTCI.jl",
     format=Documenter.HTML(;
-        canonical="https://github.com/tensor4all/T4ATemplate.jl",
+        canonical="https://github.com/tensor4all/TreeTCI.jl",
         edit_link="main",
         assets=String[]),
     pages=[
@@ -17,6 +17,6 @@ makedocs(;
 )
 
 deploydocs(;
-    repo="github.com/tensor4all/T4ATemplate.jl.git",
+    repo="github.com/tensor4all/TreeTCI.jl.git",
     devbranch="main",
 )

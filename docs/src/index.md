@@ -1,8 +1,8 @@
 ```@meta
-CurrentModule = T4ATemplate
+CurrentModule = TreeTCI
 ```
 
-# T4ATemplate
+# TreeTCI
 
-This is the documentation for [T4ATemplate](https://github.com/tensor4all/T4ATemplate.jl).
+This is the documentation for [TreeTCI](https://github.com/tensor4all/TreeTCI.jl).
 

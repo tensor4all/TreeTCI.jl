@@ -1,4 +1,4 @@
 using ReTestItems: runtests, @testitem
-using T4ATemplate: T4ATemplate
+using TreeTCI: TreeTCI
 
-runtests(T4ATemplate)
+runtests(TreeTCI)
