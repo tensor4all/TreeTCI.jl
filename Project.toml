@@ -1,7 +1,13 @@
 name = "TreeTCI"
-uuid = "0bdf9575-3f87-4902-a4f6-9b69ae7d86fb"
-authors = ["Hiroshi Shinaoka <h.shinaoka@gmail.com>"]
+uuid = "ac02bf95-72b1-4658-a692-4d4ff10c3b7f"
+authors = ["Ryo Watanabe <https://github.com/Ryo-wtnb11>"]
 version = "0.1.0"
+
+[deps]
+TensorCrossInterpolation = "b261b2ec-6378-4871-b32e-9173bb050604"
+
+[compat]
+TensorCrossInterpolation = "0.9.13"
 
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
