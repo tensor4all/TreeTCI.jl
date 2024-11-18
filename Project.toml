@@ -4,9 +4,11 @@ authors = ["Ryo Watanabe <https://github.com/Ryo-wtnb11>"]
 version = "0.1.0"
 
 [deps]
+SimpleTensorNetworks = "4456351a-5be3-4067-ade9-541926a41e04"
 TensorCrossInterpolation = "b261b2ec-6378-4871-b32e-9173bb050604"
 
 [compat]
+SimpleTensorNetworks = "0.2.1"
 TensorCrossInterpolation = "0.9.13"
 
 [extras]
