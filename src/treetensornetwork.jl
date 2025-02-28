@@ -21,9 +21,9 @@ mutable struct TreeTensorNetwork
     tn::TensorNetwork
 
     function TreeTensorNetwork(tn::TensorNetwork)
-        !Graphs.is_cyclic(tn) || error("TreeTensorNetwork is not supported for loopy tensor network.")
+        !Graphs.is_cyclic(tn) ||
+            error("TreeTensorNetwork is not supported for loopy tensor network.")
         # TODO: we need to check each site tensor has the site index at first dimension.
         new(tn)
     end
 end
-

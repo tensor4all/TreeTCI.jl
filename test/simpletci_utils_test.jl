@@ -31,7 +31,3 @@ import NamedGraphs: NamedGraph, NamedEdge, add_edge!, edges, has_edge
     end
 
 end
-
-
-
-
