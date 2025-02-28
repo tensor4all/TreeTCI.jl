@@ -1,19 +1,20 @@
 using Base: SimpleLogger
 MultiIndex = Vector{Int}
+SubTreeVertex = Vector{Int}
 
 mutable struct SimpleTCI{ValueType}
-    IJset::Dict{Vector{Int}, Vector{MultiIndex}}
+    IJset::Dict{SubTreeVertex, Vector{MultiIndex}}
     localdims::Vector{Int}
     g:: NamedGraph
     sitetensors::Dict{Int, Array{ValueType}}
-    idbonds::Dict{String, NamedEdge}
+    idbonds::Dict{Pair{SubTreeVertex, SubTreeVertex}, NamedEdge}
     # "Error estimate for backtruncation of bonds."
-    pivoterrors::Dict{String, Float64} # key is the bond id
+    pivoterrors::Dict{Pair{SubTreeVertex, SubTreeVertex}, Float64} # key is the bond id
     #"Error estimate per bond by 2site sweep."
-    bonderrors::Dict{String, Float64} # key is the bond id
+    bonderrors::Dict{Pair{SubTreeVertex, SubTreeVertex}, Float64} # key is the bond id
     #"Maximum sample for error normalization."
     maxsamplevalue::Float64
-    IJset_history::Dict{Vector{Int}, Vector{Vector{MultiIndex}}}
+    IJset_history::Dict{SubTreeVertex, Vector{Vector{MultiIndex}}}
 
     function SimpleTCI{ValueType}(
         localdims::Vector{Int},
@@ -22,15 +23,15 @@ mutable struct SimpleTCI{ValueType}
         length(localdims) > 1 || error("localdims should have at least 2 elements!")
         n = length(localdims)
 
-        # make a unique bond index for each bond
-        idbonds = Dict{String, NamedEdge}()
-        pivoterrors = Dict{String, Float64}()
-        bonderrors = Dict{String, Float64}()
+        # assign the key for each bond
+        idbonds = Dict{Pair{Pair{SubTreeVertex, SubTreeVertex}}, NamedEdge}()
+        pivoterrors = Dict{Pair{Pair{SubTreeVertex, SubTreeVertex}}, Float64}()
+        bonderrors = Dict{Pair{Pair{SubTreeVertex, SubTreeVertex}}, Float64}()
         for e in edges(g)
-            u = string(uuid4())
-            idbonds[u] = e
-            pivoterrors[u] = 0.0
-            bonderrors[u] = 0.0
+            subregions_pair = subregion_vertices(g, e)
+            idbonds[subregions_pair] = e
+            pivoterrors[subregions_pair] = 0.0
+            bonderrors[subregions_pair] = 0.0
         end
 
         # make an IndexedArray for each verticec
@@ -43,7 +44,7 @@ mutable struct SimpleTCI{ValueType}
         !Graphs.is_cyclic(g) || error("TreeTensorNetwork is not supported for loopy tensor network.")
 
         new{ValueType}(
-            Dict{Vector{Int}, Vector{MultiIndex}}(),               # IJset
+            Dict{SubTreeVertex, Vector{MultiIndex}}(),               # IJset
             localdims,
             g,
             sitetensors,
@@ -51,7 +52,7 @@ mutable struct SimpleTCI{ValueType}
             pivoterrors,
             bonderrors,
             0.0,                                                   # maxsamplevalue
-            Dict{Vector{Int}, Vector{Vector{MultiIndex}}}(),       # IJset_history
+            Dict{SubTreeVertex, Vector{Vector{MultiIndex}}}(),       # IJset_history
         )
     end
 end
@@ -394,7 +395,6 @@ function updatepivots!(
     tci::SimpleTCI{ValueType},
     bondid::String,
     f::F,
-    leftorthogonal::Bool; # 多分いらないけど、何に使ってるかに依存する。
     reltol::Float64=1e-14,
     abstol::Float64=0.0,
     maxbonddim::Int=typemax(Int),
@@ -713,17 +713,12 @@ end
 
 function separate_vertices(g::NamedGraph, edge::NamedEdge)
     has_edge(g, edge) || error("The edge is not in the graph.")
-    return src(edge), dst(edge)
+    p, q = src(edge), dst(edge)
+    p, q = p < q ? (p, q) : (q, p)
+    return p, q
 end
 
-# いらないかも
-function separate_vertices(g::NamedGraph, bondid::String, idbonds::Dict{String, NamedEdge})
-    edge = idbonds[bondid]
-    has_edge(g, edge) || error("The edge is not in the graph.")
-    return src(edge), dst(edge)
-end
-
-function subregions(g::NamedGraph, parent::Int, children::Union{Int, Vector{Int}}) :: Vector{Int}
+function subtree_vertices(g::NamedGraph, parent::Int, children::Union{Int, Vector{Int}}) :: Vector{Int}
     if children isa Int
         children = [children]
     end
@@ -731,11 +726,18 @@ function subregions(g::NamedGraph, parent::Int, children::Union{Int, Vector{Int}
     for child in children
         candidates = outneighbors(g, child)
         candidates = [cand for cand in candidates if cand != parent]
-        append!(grandchildren, subregions(g, child, candidates))
+        append!(grandchildren, subtree_vertices(g, child, candidates))
         append!(grandchildren, [child])
     end
     sort!(grandchildren)
     return grandchildren
+end
+
+function subregion_vertices(g::NamedGraph, edge::NamedEdge)
+    p, q = separate_vertices(g, edge)
+    Iregions = subtree_vertices(g, q, p)
+    Jregions = subtree_vertices(g, p, q)
+    return (Iregions, Jregions)
 end
 
 function distanceBFS(g::NamedGraph, parent::Int, children::Union{Int, Vector{Int}}, distances::Dict{String, Int}, idbonds::Dict{String, NamedEdge}) :: Dict{String, Int}
