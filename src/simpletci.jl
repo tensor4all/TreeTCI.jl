@@ -1,13 +1,11 @@
 using Base: SimpleLogger
-MultiIndex = Vector{Int}
-SubTreeVertex = Vector{Int}
 
 mutable struct SimpleTCI{ValueType}
     IJset::Dict{SubTreeVertex, Vector{MultiIndex}}
     localdims::Vector{Int}
     g:: NamedGraph
     sitetensors::Dict{Int, Array{ValueType}}
-    idbonds::Dict{Pair{SubTreeVertex, SubTreeVertex}, NamedEdge}
+    regionbonds::Dict{Pair{SubTreeVertex, SubTreeVertex}, NamedEdge}
     # "Error estimate for backtruncation of bonds."
     pivoterrors::Dict{Pair{SubTreeVertex, SubTreeVertex}, Float64} # key is the bond id
     #"Error estimate per bond by 2site sweep."
@@ -24,12 +22,12 @@ mutable struct SimpleTCI{ValueType}
         n = length(localdims)
 
         # assign the key for each bond
-        idbonds = Dict{Pair{Pair{SubTreeVertex, SubTreeVertex}}, NamedEdge}()
-        pivoterrors = Dict{Pair{Pair{SubTreeVertex, SubTreeVertex}}, Float64}()
-        bonderrors = Dict{Pair{Pair{SubTreeVertex, SubTreeVertex}}, Float64}()
+        regionbonds = Dict{Pair{SubTreeVertex, SubTreeVertex}, NamedEdge}()
+        pivoterrors = Dict{Pair{SubTreeVertex, SubTreeVertex}, Float64}()
+        bonderrors = Dict{Pair{SubTreeVertex, SubTreeVertex}, Float64}()
         for e in edges(g)
             subregions_pair = subregion_vertices(g, e)
-            idbonds[subregions_pair] = e
+            regionbonds[subregions_pair] = e
             pivoterrors[subregions_pair] = 0.0
             bonderrors[subregions_pair] = 0.0
         end
@@ -48,7 +46,7 @@ mutable struct SimpleTCI{ValueType}
             localdims,
             g,
             sitetensors,
-            idbonds,
+            regionbonds,
             pivoterrors,
             bonderrors,
             0.0,                                                   # maxsamplevalue
@@ -56,7 +54,6 @@ mutable struct SimpleTCI{ValueType}
         )
     end
 end
-
 
 function SimpleTCI{ValueType}(
     func::F,
@@ -85,8 +82,8 @@ function addglobalpivots!(
     for pivot in pivots
         for e in edges(tci.g)
             p, q = separate_vertices(tci.g, e)
-            Iset_key = subregions(tci.g, p, q)
-            Jset_key = subregions(tci.g, q, p)
+            Iset_key = subtree_vertices(tci.g, p => q)
+            Jset_key = subtree_vertices(tci.g, q => p)
 
             if !haskey(tci.IJset, Iset_key)
                 tci.IJset[Iset_key] = Vector{MultiIndex}()
@@ -160,9 +157,6 @@ function optimize!(
         error("Function `f` is not batch evaluatable")
     end
 
-    #if maxnglobalpivot > 0 && nsearchglobalpivot > 0
-        #!strictlynested || error("nglobalpivots > 0 requires strictlynested=false!")
-    #end
     if nsearchglobalpivot > 0 && nsearchglobalpivot < maxnglobalpivot
         error("nsearchglobalpivot < maxnglobalpivot!")
     end
@@ -253,24 +247,27 @@ function sweep2site!(
 
     n = length(tci.localdims) # TODO: Implement for AbstractTreeTensorNetwork
 
+    # assigne the uuid for each bond
+    invariantbondids = Dict([i => key for (i, key) in enumerate(keys(tci.regionbonds))])
+    reverse_invariantbondids = Dict([key => i for (i, key) in enumerate(keys(tci.regionbonds))])
+
     # choose the center bond id.
     d = n
-    center_id = undef
-    for key in keys(tci.idbonds)
-        e = tci.idbonds[key]
+    origin_id = undef
+    for (id, key) in invariantbondids
+        e = tci.regionbonds[key]
         p, q = separate_vertices(tci.g, e)
-        Iset = length(subregions(tci.g, p, q))
-        Jset = length(subregions(tci.g, q, p))
+        Iset = length(subtree_vertices(tci.g, p => q))
+        Jset = length(subtree_vertices(tci.g, q => p))
         d_tmp = abs(Iset - Jset)
         if d_tmp < d
             d = d_tmp
-            center_id = key
+            origin_id = id
         end
     end
-    center_id_ = center_id
+    center_id = origin_id
 
     for iter in iter1:iter1+niter-1
-
         extraIJset = Dict(key => MultiIndex[] for key in keys(tci.IJset))
         if !strictlynested && length(tci.IJset_history) > 0
             extraIJset = Dict(key => tci.IJset_history[key][end] for key in keys(tci.IJset_history))
@@ -286,61 +283,43 @@ function sweep2site!(
         flushpivoterror!(tci)
 
         # Init flags
-        flags = Dict{String, Bool}()
-        for key in keys(tci.idbonds)
+        flags = Dict{Int, Bool}()
+        for key in keys(invariantbondids)
             flags[key] = 0
         end
 
         # Sweep until all bonds are applied.
         while true
-            p, q = separate_vertices(tci.g, tci.idbonds[center_id])
-            distances = Dict{String, Int}()
-            distances[center_id] = 0
-            distances = distanceBFS(tci.g, p, q, distances, tci.idbonds)
-            distances = distanceBFS(tci.g, q, p, distances, tci.idbonds)
+            distances = bonddistances(tci.g, tci.regionbonds, invariantbondids[origin_id])
 
-            p_, q_ = separate_vertices(tci.g, tci.idbonds[center_id_])
-            candidates = vcat([(c, q_, p_) for c in candidate_bondids(tci.g, p_, q_, tci.idbonds)],
-                            [(c, p_, q_) for c in candidate_bondids(tci.g, q_, p_, tci.idbonds)])
-            candidates = filter(((c, vt, vf), ) -> flags[c] == 0, candidates)
+            candidates = bondinfocandidates(tci.g, tci.regionbonds, invariantbondids[center_id])
+            candidates = filter(((c, parent_child), ) -> flags[reverse_invariantbondids[c]] == 0, candidates)
 
             # If candidates is empty, exit while loop
             if isempty(candidates)
                 break
             end
 
-            max_distance = maximum(distances[c] for (c, vt, vf) in candidates)
-            candidates = filter(((c, vt, vf), ) -> distances[c] == max_distance, candidates)
+            max_distance = maximum(distances[c] for (c, parent_child) in candidates)
+            candidates = filter(((c, parent_child), ) -> distances[c] == max_distance, candidates)
 
             center_info = first(candidates)
 
-            incomings = candidate_bondids(tci.g, center_info[2], center_info[3], tci.idbonds)
-
+            incomings = bondcandidates(tci.g, last(center_info), tci.regionbonds)
             # Update flags. However, the center bond is not applied.
-            if all(flags[c] == 1 for c in incomings) && center_id_ != center_id
-                flags[center_id_] = 1
+            if all(flags[reverse_invariantbondids[c]] == 1 for c in incomings) && center_id != origin_id
+                flags[center_id] = 1
             end
 
-            # Next center bond is the candidate with the maximum distance.
-            center_id_ = center_info[1]
-            vp, vq = separate_vertices(tci.g, tci.idbonds[center_id_])
-            Ikeys, subIkey = subregions(tci.g, vp, vq), vq
-            Jkeys, subJkey = subregions(tci.g, vq, vp), vp
-            subIJkey = [subIkey, subJkey]
-            IJkeys = [Ikeys, Jkeys]
-
+            # pivot candidates
+            center_bond = first(center_info)
             # Update the pivot at the center bond.
             updatepivots!(
-                    tci, center_id_, f, true;
+                    tci, center_bond, f;
                     abstol=abstol,
                     maxbonddim=maxbonddim,
-                    pivotsearch=pivotsearch,
                     verbosity=verbosity,
-                    IJkeys=IJkeys,
-                    subIJkey=subIJkey,
-                    extraIJset=Dict(first(IJkeys) => extraIJset[first(IJkeys)], last(IJkeys) => extraIJset[last(IJkeys)])
                 )
-
         end
     end
 
@@ -373,7 +352,7 @@ function setsitetensor!(
 end
 
 function flushpivoterror!(tci::SimpleTCI{T}) where {T}
-    for key in keys(tci.idbonds)
+    for key in keys(tci.regionbonds)
         tci.pivoterrors[key] = 0.0
     end
     nothing
@@ -393,100 +372,63 @@ Site tensors will be invalidated.
 """
 function updatepivots!(
     tci::SimpleTCI{ValueType},
-    bondid::String,
-    f::F,
+    bond::Pair{SubTreeVertex,SubTreeVertex},
+    f::F;
     reltol::Float64=1e-14,
     abstol::Float64=0.0,
     maxbonddim::Int=typemax(Int),
-    pivotsearch::Symbol=:full,
     verbosity::Int=0,
-    IJkeys::Vector{Vector{Int}}=Vector{Vector{Int}}(),
-    subIJkey::Vector{Int}=Vector{Int}(),
-    extraIJset::Dict{Vector{Int}, Vector{MultiIndex}}=Dict{Vector{Int}, Vector{MultiIndex}}(),
 ) where {F,ValueType}
     invalidatesitetensors!(tci)
     N = length(tci.localdims)
-    Ikey, Jkey = first(IJkeys), last(IJkeys)
-    Iset = kronecker(tci.IJset, first(IJkeys), first(subIJkey), tci.localdims[first(subIJkey)])
-    Jset = kronecker(tci.IJset, last(IJkeys), last(subIJkey), tci.localdims[last(subIJkey)])
-    Icombined = union(Iset, extraIJset[Ikey])
-    Jcombined = union(Jset, extraIJset[Jkey])
 
-    luci = if pivotsearch === :full
-        t1 = time_ns()
-        Pi = reshape(
-            filltensor(ValueType, f, tci.localdims,
-            Icombined, Jcombined, Val(0)),
-            length(Icombined), length(Jcombined)
-        )
-        t2 = time_ns()
+    vp, vq = separate_vertices(tci.g, tci.regionbonds[bond])
+    Ikey, subIkey = subtree_vertices(tci.g, vp => vq), vq
+    Jkey, subJkey = subtree_vertices(tci.g, vq => vp), vp
 
-        updatemaxsample!(tci, Pi)
-        luci = TCI.MatrixLUCI(
-            Pi,
-            reltol=reltol,
-            abstol=abstol,
-            maxrank=maxbonddim,
-            leftorthogonal=leftorthogonal
-        )
-        t3 = time_ns()
-        if verbosity > 2
-            x, y = length(Icombined), length(Jcombined)
-            println("    Computing Pi ($x x $y) at bond $b: $(1e-9*(t2-t1)) sec, LU: $(1e-9*(t3-t2)) sec")
-        end
-        luci
-    elseif pivotsearch === :rook
-        t1 = time_ns()
-        I0 = Int.(Iterators.filter(!isnothing, findfirst(isequal(i), Icombined) for i in tci.Iset[b+1]))::Vector{Int}
-        J0 = Int.(Iterators.filter(!isnothing, findfirst(isequal(j), Jcombined) for j in tci.Jset[b]))::Vector{Int}
-        Pif = SubMatrix{ValueType}(f, Icombined, Jcombined)
-        t2 = time_ns()
-        res = MatrixLUCI(
-            ValueType,
-            Pif,
-            (length(Icombined), length(Jcombined)),
-            I0, J0;
-            reltol=reltol, abstol=abstol,
-            maxrank=maxbonddim,
-            leftorthogonal=leftorthogonal,
-            pivotsearch=:rook,
-            usebatcheval=true
-        )
-        updatemaxsample!(tci, [ValueType(Pif.maxsamplevalue)])
-
-        t3 = time_ns()
-
-        # Fall back to full search if rook search fails
-        if npivots(res) == 0
-            Pi = reshape(
-                filltensor(ValueType, f, tci.localdims,
-                Icombined, Jcombined, Val(0)),
-                length(Icombined), length(Jcombined)
-            )
-            updatemaxsample!(tci, Pi)
-            res = MatrixLUCI(
-                Pi,
-                reltol=reltol,
-                abstol=abstol,
-                maxrank=maxbonddim,
-                leftorthogonal=leftorthogonal
-            )
-        end
-
-        t4 = time_ns()
-        if verbosity > 2
-            x, y = length(Icombined), length(Jcombined)
-            println("    Computing Pi ($x x $y) at bond $b: $(1e-9*(t2-t1)) sec, LU: $(1e-9*(t3-t2)) sec, fall back to full: $(1e-9*(t4-t3)) sec")
-        end
-        res
-    else
-        throw(ArgumentError("Unknown pivot search strategy $pivotsearch. Choose from :rook, :full."))
+    # extract last histroy if not strictly nested
+    extraIJset = Dict(key => MultiIndex[] for key in keys(tci.IJset))
+    if length(tci.IJset_history) > 0
+        extraIJset = Dict(key => tci.IJset_history[key][end] for key in keys(tci.IJset_history))
     end
-    I_key = collect(1:b)
-    J_key = collect(b+1:N)
-    tci.Iset[I_key] = Icombined[TCI.rowindices(luci)]
-    tci.Jset[J_key] = Jcombined[TCI.colindices(luci)]
-    if length(extraIset) == 0 && length(extraJset) == 0
+
+    Icombined, Jcombined = generate_pivot_candidates(
+        DefaultPivotCandidateProper(),
+        tci.g,
+        tci.IJset,
+        tci.IJset_history,
+        extraIJset,
+        tci.regionbonds,
+        tci.localdims,
+        bond,
+        (Ikey => Jkey),
+        (subIkey => subJkey),
+    )
+
+    t1 = time_ns()
+    Pi = reshape(
+        filltensor(ValueType, f, tci.localdims,
+        Icombined, Jcombined, Val(0)),
+        length(Icombined), length(Jcombined)
+    )
+    t2 = time_ns()
+
+    updatemaxsample!(tci, Pi)
+    luci = TCI.MatrixLUCI(
+        Pi,
+        reltol=reltol,
+        abstol=abstol,
+        maxrank=maxbonddim,
+    )
+    t3 = time_ns()
+    if verbosity > 2
+        x, y = length(Icombined), length(Jcombined)
+        println("    Computing Pi ($x x $y) at bond $b: $(1e-9*(t2-t1)) sec, LU: $(1e-9*(t3-t2)) sec")
+    end
+
+    tci.IJset[Ikey] = Icombined[TCI.rowindices(luci)]
+    tci.IJset[Jkey] = Jcombined[TCI.colindices(luci)]
+    if length(first(extraIJset)) == 0 && length(last(extraIJset)) == 0
         setsitetensor!(tci, b, TCI.left(luci))
         setsitetensor!(tci, b + 1, TCI.right(luci))
     end
@@ -596,32 +538,6 @@ function filltensor(
     )
 end
 
-function kronecker(
-    IJset::Dict{Vector{Int}, Vector{MultiIndex}},
-    subregions::Vector{Int},  # original subregions order
-    site::Int,          # direct connected site
-    localdim::Int,
-)
-    site_index = findfirst(==(site), subregions)
-    filtered_subregions = filter(x -> x ≠ Set([site]), subregions)
-    pivotset = IJset[subregions]
-    return MultiIndex[[is[1:site_index-1]..., j, is[site_index:end]...] for is in pivotset, j in 1:localdim][:]
-end
-
-function kronecker(
-    Iset::Union{Vector{MultiIndex},TCI.IndexSet{MultiIndex}},
-    localdim::Int
-)
-    return MultiIndex[[is..., j] for is in Iset, j in 1:localdim][:]
-end
-
-function kronecker(
-    localdim::Int,
-    Jset::Union{Vector{MultiIndex},TCI.IndexSet{MultiIndex}}
-)
-    return MultiIndex[[i, js...] for i in 1:localdim, js in Jset][:]
-end
-
 function _call(
     ::Type{V},
     f,
@@ -709,74 +625,6 @@ Return if site tensors are available
 """
 function issitetensorsavailable(tci::SimpleTCI{T}) where {T}
     return all(length(tci.sitetensors[b]) != 0 for b in 1:length(tci))
-end
-
-function separate_vertices(g::NamedGraph, edge::NamedEdge)
-    has_edge(g, edge) || error("The edge is not in the graph.")
-    p, q = src(edge), dst(edge)
-    p, q = p < q ? (p, q) : (q, p)
-    return p, q
-end
-
-function subtree_vertices(g::NamedGraph, parent::Int, children::Union{Int, Vector{Int}}) :: Vector{Int}
-    if children isa Int
-        children = [children]
-    end
-    grandchildren = []
-    for child in children
-        candidates = outneighbors(g, child)
-        candidates = [cand for cand in candidates if cand != parent]
-        append!(grandchildren, subtree_vertices(g, child, candidates))
-        append!(grandchildren, [child])
-    end
-    sort!(grandchildren)
-    return grandchildren
-end
-
-function subregion_vertices(g::NamedGraph, edge::NamedEdge)
-    p, q = separate_vertices(g, edge)
-    Iregions = subtree_vertices(g, q, p)
-    Jregions = subtree_vertices(g, p, q)
-    return (Iregions, Jregions)
-end
-
-function distanceBFS(g::NamedGraph, parent::Int, children::Union{Int, Vector{Int}}, distances::Dict{String, Int}, idbonds::Dict{String, NamedEdge}) :: Dict{String, Int}
-    for child in children
-        parent_key = ""
-        for (key, item) in idbonds
-            if (src(item) == parent && dst(item) == child) || (src(item) == child && dst(item) == parent)
-                parent_key = key
-            end
-        end
-
-        candidates = outneighbors(g, child)
-        candidates = [cand for cand in candidates if cand != parent]
-        for cand in candidates
-            for (key, item) in idbonds
-                if (src(item) == child && dst(item) == cand) || (src(item) == cand && dst(item) == child)
-                    distances[key] = distances[parent_key] + 1
-                    break
-                end
-            end
-        end
-        distances = merge!(distances, distanceBFS(g, child, candidates, distances, idbonds))
-    end
-    return distances
-end
-
-function candidate_bondids(g::NamedGraph, parent::Int, child::Int, idbonds::Dict{String, NamedEdge}) :: Vector{String}
-    candidates = []
-    neighbors = outneighbors(g, child)
-    neighbors = [cand for cand in neighbors if cand != parent]
-    for cand in neighbors
-        for (key, item) in idbonds
-            if (src(item) == child && dst(item) == cand) || (src(item) == cand && dst(item) == child)
-                push!(candidates, key)
-                break
-            end
-        end
-    end
-    return candidates
 end
 
 function pushunique!(collection, item)

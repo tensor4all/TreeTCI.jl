@@ -19,8 +19,8 @@ import NamedGraphs: NamedGraph, NamedEdge, add_edge!, edges, has_edge
         @test v1 == 2
         @test v2 == 4
 
-        Ivertices = TreeTCI.subtree_vertices(g, v2, v1) # 4 -> 2
-        Jvertices = TreeTCI.subtree_vertices(g, v1, v2) # 2 -> 4
+        Ivertices = TreeTCI.subtree_vertices(g, v2 => v1) # 4 -> 2
+        Jvertices = TreeTCI.subtree_vertices(g, v1 => v2) # 2 -> 4
 
         @test Ivertices == [1, 2, 3]
         @test Jvertices == [4, 5, 6, 7]
