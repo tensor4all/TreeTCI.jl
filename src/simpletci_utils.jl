@@ -1,14 +1,24 @@
 MultiIndex = Vector{Int}
 SubTreeVertex = Vector{Int}
 
-function separate_vertices(g::NamedGraph, edge::NamedEdge)
+function separatevertices(g::NamedGraph, edge::NamedEdge)
     has_edge(g, edge) || error("The edge is not in the graph.")
     p, q = src(edge), dst(edge)
     p, q = p < q ? (p, q) : (q, p)
     return p, q
 end
 
-function subtree_vertices(g::NamedGraph, parent_children::Pair{Int, <:Union{Int, Vector{Int}}}) :: Vector{Int}
+function adjacentbonds(g::NamedGraph, vertex::Int, regionbonds::Dict{Pair{SubTreeVertex, SubTreeVertex}, NamedEdge})
+    bonds = []
+    for (key, edge) in regionbonds
+        if src(edge) == vertex || dst(edge) == vertex
+            push!(bonds, key)
+        end
+    end
+    return bonds
+end
+
+function subtreevertices(g::NamedGraph, parent_children::Pair{Int, <:Union{Int, Vector{Int}}}) :: Vector{Int}
     parent, children = first(parent_children), last(parent_children)
     if children isa Int
         children = [children]
@@ -17,17 +27,17 @@ function subtree_vertices(g::NamedGraph, parent_children::Pair{Int, <:Union{Int,
     for child in children
         candidates = outneighbors(g, child)
         candidates = [cand for cand in candidates if cand != parent]
-        append!(grandchildren, subtree_vertices(g, child => candidates))
+        append!(grandchildren, subtreevertices(g, child => candidates))
         append!(grandchildren, [child])
     end
     sort!(grandchildren)
     return grandchildren
 end
 
-function subregion_vertices(g::NamedGraph, edge::NamedEdge)
-    p, q = separate_vertices(g, edge)
-    Iregions = subtree_vertices(g, q => p)
-    Jregions = subtree_vertices(g, p => q)
+function subregionvertices(g::NamedGraph, edge::NamedEdge)
+    p, q = separatevertices(g, edge)
+    Iregions = subtreevertices(g, q => p)
+    Jregions = subtreevertices(g, p => q)
     return Pair(Iregions, Jregions)
 end
 
@@ -35,7 +45,7 @@ function bonddistances(
     g::NamedGraph,
     regionbonds::Dict{Pair{SubTreeVertex, SubTreeVertex}, NamedEdge},
     origin_bond::Pair{SubTreeVertex, SubTreeVertex}) :: Dict{Pair{SubTreeVertex, SubTreeVertex}, Int}
-    p, q = separate_vertices(g, regionbonds[origin_bond])
+    p, q = separatevertices(g, regionbonds[origin_bond])
     distances = Dict{Pair{SubTreeVertex, SubTreeVertex}, Int}()
     distances[origin_bond] = 0
     distances = distanceBFS(g, p => q, distances, regionbonds)
@@ -76,7 +86,7 @@ function bondinfocandidates(
     g::NamedGraph,
     regionbonds::Dict{Pair{SubTreeVertex, SubTreeVertex}, NamedEdge},
     center_bond::Pair{SubTreeVertex, SubTreeVertex})
-    p, q = separate_vertices(g, regionbonds[center_bond])
+    p, q = separatevertices(g, regionbonds[center_bond])
     candidates = vcat([(c, q => p) for c in bondcandidates(g, p => q, regionbonds)],
                     [(c, p => q) for c in bondcandidates(g, q => p, regionbonds)])
     return candidates
