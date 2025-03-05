@@ -110,3 +110,16 @@ function bondcandidates(
     end
     return candidates
 end
+
+function bondtokey(g::NamedGraph, vf::Int, bonds, regionbonds::Dict{Pair{SubTreeVertex, SubTreeVertex}, NamedEdge})
+    keys = SubTreeVertex[]
+    for bond in bonds
+        p, q = separatevertices(g, regionbonds[bond])
+        if p == vf
+            push!(keys, subtreevertices(g, p => q))
+        elseif q == vf
+            push!(keys, subtreevertices(g, q => p))
+        end
+    end
+    return keys
+end
