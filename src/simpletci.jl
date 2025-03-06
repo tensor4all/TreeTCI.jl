@@ -1,7 +1,7 @@
 using Base: SimpleLogger
 
 mutable struct SimpleTCI{ValueType}
-    IJset::Dict{SubTreeVertex, Vector{MultiIndex}}
+    IJset::Dict{SubTreeVertex,Vector{MultiIndex}}
     localdims::Vector{Int}
     g:: NamedGraph
     sitetensors::Dict{Int, Pair{Array{ValueType}, Vector{NamedEdge}}}
@@ -12,12 +12,9 @@ mutable struct SimpleTCI{ValueType}
     pivoterrors::Vector{Float64} # key is the bond id
     #"Maximum sample for error normalization."
     maxsamplevalue::Float64
-    IJset_history::Dict{SubTreeVertex, Vector{Vector{MultiIndex}}}
+    IJset_history::Dict{SubTreeVertex,Vector{Vector{MultiIndex}}}
 
-    function SimpleTCI{ValueType}(
-        localdims::Vector{Int},
-        g::NamedGraph,
-    ) where {ValueType}
+    function SimpleTCI{ValueType}(localdims::Vector{Int}, g::NamedGraph) where {ValueType}
         length(localdims) > 1 || error("localdims should have at least 2 elements!")
         n = length(localdims)
 
@@ -37,10 +34,11 @@ mutable struct SimpleTCI{ValueType}
             sitetensors[v] = zeros(dims...) => [e for e in edges(g) if src(e) == v || dst(e) == v]
         end
 
-        !Graphs.is_cyclic(g) || error("TreeTensorNetwork is not supported for loopy tensor network.")
+        !Graphs.is_cyclic(g) ||
+            error("TreeTensorNetwork is not supported for loopy tensor network.")
 
         new{ValueType}(
-            Dict{SubTreeVertex, Vector{MultiIndex}}(),               # IJset
+            Dict{SubTreeVertex,Vector{MultiIndex}}(),               # IJset
             localdims,
             g,
             sitetensors,
@@ -48,7 +46,7 @@ mutable struct SimpleTCI{ValueType}
             bonderrors,
             Float64[],
             0.0,                                                   # maxsamplevalue
-            Dict{SubTreeVertex, Vector{Vector{MultiIndex}}}(),       # IJset_history
+            Dict{SubTreeVertex,Vector{Vector{MultiIndex}}}(),       # IJset_history
         )
     end
 end
@@ -62,7 +60,8 @@ function SimpleTCI{ValueType}(
     tci = SimpleTCI{ValueType}(localdims, g)
     addglobalpivots!(tci, initialpivots)
     tci.maxsamplevalue = maximum(abs, (func(x) for x in initialpivots))
-    abs(tci.maxsamplevalue) > 0 || error("The function should not be zero at the initial pivot.")
+    abs(tci.maxsamplevalue) > 0 ||
+        error("The function should not be zero at the initial pivot.")
     invalidatesitetensors!(tci)
     return tci
 end
@@ -72,7 +71,7 @@ Add global pivots to index sets
 """
 function addglobalpivots!(
     tci::SimpleTCI{ValueType},
-    pivots::Vector{MultiIndex}
+    pivots::Vector{MultiIndex},
 ) where {ValueType}
     if any(length(tci.localdims) .!= length.(pivots)) # AbstructTreeTensorNetworkをから引き継ぎlength(tci)ができると良い
         throw(DimensionMismatch("Please specify a pivot as one index per leg of the TTN."))
@@ -119,8 +118,8 @@ function crossinterpolate(
     f,
     localdims::Union{Vector{Int},NTuple{N,Int}},
     g::NamedGraph,
-    initialpivots::Vector{MultiIndex}=[ones(Int, length(localdims))];
-    kwargs...
+    initialpivots::Vector{MultiIndex} = [ones(Int, length(localdims))];
+    kwargs...,
 ) where {ValueType,N}
     tci = SimpleTCI{ValueType}(f, localdims, g, initialpivots)
     ranks, errors = optimize!(tci, f; kwargs...)
@@ -130,21 +129,21 @@ end
 function optimize!(
     tci::SimpleTCI{ValueType},
     f;
-    tolerance::Union{Float64, Nothing}=nothing,
-    pivottolerance::Union{Float64, Nothing}=nothing,
-    maxbonddim::Int=typemax(Int),
-    maxiter::Int=20,
-    sweepstrategy::Symbol=:backandforth, # TODO: Implement for Tree structure
-    pivotsearch::Symbol=:full,
-    verbosity::Int=0,
-    loginterval::Int=10,
-    normalizeerror::Bool=true,
-    ncheckhistory::Int=3,
-    maxnglobalpivot::Int=5,
-    nsearchglobalpivot::Int=5,
-    tolmarginglobalsearch::Float64=10.0,
-    strictlynested::Bool=false,
-    checkbatchevaluatable::Bool=false
+    tolerance::Union{Float64,Nothing} = nothing,
+    pivottolerance::Union{Float64,Nothing} = nothing,
+    maxbonddim::Int = typemax(Int),
+    maxiter::Int = 20,
+    sweepstrategy::Symbol = :backandforth, # TODO: Implement for Tree structure
+    pivotsearch::Symbol = :full,
+    verbosity::Int = 0,
+    loginterval::Int = 10,
+    normalizeerror::Bool = true,
+    ncheckhistory::Int = 3,
+    maxnglobalpivot::Int = 5,
+    nsearchglobalpivot::Int = 5,
+    tolmarginglobalsearch::Float64 = 10.0,
+    strictlynested::Bool = false,
+    checkbatchevaluatable::Bool = false,
 ) where {ValueType}
     errors = Float64[]
     ranks = Int[]
@@ -162,7 +161,11 @@ function optimize!(
     # Deprecate the pivottolerance option
     if !isnothing(pivottolerance)
         if !isnothing(tolerance) && (tolerance != pivottolerance)
-            throw(ArgumentError("Got different values for pivottolerance and tolerance in optimize!(TCI2). For TCI2, both of these options have the same meaning. Please assign only `tolerance`."))
+            throw(
+                ArgumentError(
+                    "Got different values for pivottolerance and tolerance in optimize!(TCI2). For TCI2, both of these options have the same meaning. Please assign only `tolerance`.",
+                ),
+            )
         else
             @warn "The option `pivottolerance` of `optimize!(tci::TensorCI2, f)` is deprecated. Please update your code to use `tolerance`, as `pivottolerance` will be removed in the future."
             tol = pivottolerance
@@ -176,15 +179,17 @@ function optimize!(
     tstart = time_ns()
 
     if maxbonddim >= typemax(Int) && tol <= 0
-        throw(ArgumentError(
-            "Specify either tolerance > 0 or some maxbonddim; otherwise, the convergence criterion is not reachable!"
-        ))
+        throw(
+            ArgumentError(
+                "Specify either tolerance > 0 or some maxbonddim; otherwise, the convergence criterion is not reachable!",
+            ),
+        )
     end
 
     globalpivots = MultiIndex[]
-    for iter in 1:maxiter
+    for iter = 1:maxiter
         errornormalization = normalizeerror ? tci.maxsamplevalue : 1.0
-        abstol = tol * errornormalization;
+        abstol = tol * errornormalization
 
         if verbosity > 1
             println("  Walltime $(1e-9*(time_ns() - tstart)) sec: starting 2site sweep")
@@ -192,7 +197,9 @@ function optimize!(
         end
 
         sweep2site!(
-            tci, f, 2;
+            tci,
+            f,
+            2;
             iter1 = 1,
             abstol=abstol,
             maxbonddim=maxbonddim,
@@ -206,14 +213,18 @@ function optimize!(
             abserr = [abs(evaluate(tci, p) - f(p)) for p in globalpivots]
             nrejections = length(abserr .> abstol)
             if nrejections > 0
-                println("  Rejected $(nrejections) global pivots added in the previous iteration, errors are $(abserr)")
+                println(
+                    "  Rejected $(nrejections) global pivots added in the previous iteration, errors are $(abserr)",
+                )
                 flush(stdout)
             end
         end
         push!(errors, last(pivoterror(tci)))
 
         if verbosity > 1
-            println("  Walltime $(1e-9*(time_ns() - tstart)) sec: start searching global pivots")
+            println(
+                "  Walltime $(1e-9*(time_ns() - tstart)) sec: start searching global pivots",
+            )
             flush(stdout)
         end
 
@@ -229,15 +240,17 @@ Perform 2site sweeps on a SimpleTCI.
 
 """
 function sweep2site!(
-    tci::SimpleTCI{ValueType}, f, niter::Int;
-    iter1::Int=1,
-    abstol::Float64=1e-8,
-    maxbonddim::Int=typemax(Int),
-    sweepstrategy::Symbol=:backandforth,
-    pivotsearch::Symbol=:full,
-    verbosity::Int=0,
-    strictlynested::Bool=false,
-    fillsitetensors::Bool=true
+    tci::SimpleTCI{ValueType},
+    f,
+    niter::Int;
+    iter1::Int = 1,
+    abstol::Float64 = 1e-8,
+    maxbonddim::Int = typemax(Int),
+    sweepstrategy::Symbol = :backandforth,
+    pivotsearch::Symbol = :full,
+    verbosity::Int = 0,
+    strictlynested::Bool = false,
+    fillsitetensors::Bool = true,
 ) where {ValueType}
     invalidatesitetensors!(tci)
 
@@ -266,7 +279,8 @@ function sweep2site!(
     for iter in iter1:iter1+niter-1
         extraIJset = Dict(key => MultiIndex[] for key in keys(tci.IJset))
         if !strictlynested && length(tci.IJset_history) > 0
-            extraIJset = Dict(key => tci.IJset_history[key][end] for key in keys(tci.IJset_history))
+            extraIJset =
+                Dict(key => tci.IJset_history[key][end] for key in keys(tci.IJset_history))
         end
 
         for key in keys(tci.IJset)
@@ -378,8 +392,7 @@ end
 
 function forwardsweep(sweepstrategy::Symbol, iteration::Int)
     return (
-        (sweepstrategy == :forward) ||
-        (sweepstrategy == :backandforth && isodd(iteration))
+        (sweepstrategy == :forward) || (sweepstrategy == :backandforth && isodd(iteration))
     )
 end
 
@@ -551,10 +564,8 @@ end
 
 function updatepivoterror!(tci::SimpleTCI{T}, errors::AbstractVector{Float64}) where {T}
     erroriter = Iterators.map(max, TCI.padzero(tci.pivoterrors), TCI.padzero(errors))
-    tci.pivoterrors = Iterators.take(
-        erroriter,
-        max(length(tci.pivoterrors), length(errors))
-    ) |> collect
+    tci.pivoterrors =
+        Iterators.take(erroriter, max(length(tci.pivoterrors), length(errors))) |> collect
     nothing
 end
 
@@ -651,10 +662,12 @@ end
 
 
 function searchglobalpivots(
-    tci::SimpleTCI{ValueType}, f, abstol;
-    verbosity::Int=0,
+    tci::SimpleTCI{ValueType},
+    f,
+    abstol;
+    verbosity::Int = 0,
     nsearch::Int = 100,
-    maxnglobalpivot::Int = 5
+    maxnglobalpivot::Int = 5,
 )::Vector{MultiIndex} where {ValueType}
     if nsearch == 0 || maxnglobalpivot == 0
         return MultiIndex[]
@@ -666,8 +679,8 @@ function searchglobalpivots(
 
     pivots = Dict{Float64,MultiIndex}()
     ttcache = TTCache(tci)
-    for _ in 1:nsearch
-        pivot, error = _floatingzone(ttcache, f; earlystoptol = 10 * abstol, nsweeps=100)
+    for _ = 1:nsearch
+        pivot, error = _floatingzone(ttcache, f; earlystoptol = 10 * abstol, nsweeps = 100)
         if error > abstol
             pivots[error] = pivot
         end
@@ -688,14 +701,14 @@ function searchglobalpivots(
         println("  Found $(length(pivots)) global pivots: max error $(maxerr)")
     end
 
-    return [p for (_,p) in pivots]
+    return [p for (_, p) in pivots]
 end
 
 """
 Return if site tensors are available
 """
 function issitetensorsavailable(tci::SimpleTCI{T}) where {T}
-    return all(length(tci.sitetensors[b]) != 0 for b in 1:length(tci))
+    return all(length(tci.sitetensors[b]) != 0 for b = 1:length(tci))
 end
 
 function pushunique!(collection, item)
