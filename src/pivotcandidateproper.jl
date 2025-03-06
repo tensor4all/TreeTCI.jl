@@ -14,14 +14,14 @@ Default strategy that runs through within all indices of site tensor according t
 function generate_pivot_candidates(
     ::DefaultPivotCandidateProper,
     g::NamedGraph,
-    IJset::Dict{SubTreeVertex, Vector{MultiIndex}},
-    IJset_history::Dict{SubTreeVertex, Vector{Vector{MultiIndex}}},
-    extraIJset::Dict{SubTreeVertex, Vector{MultiIndex}},
-    regionbonds::Dict{Pair{SubTreeVertex, SubTreeVertex}, NamedEdge},
+    IJset::Dict{SubTreeVertex,Vector{MultiIndex}},
+    IJset_history::Dict{SubTreeVertex,Vector{Vector{MultiIndex}}},
+    extraIJset::Dict{SubTreeVertex,Vector{MultiIndex}},
+    regionbonds::Dict{Pair{SubTreeVertex,SubTreeVertex},NamedEdge},
     localdims::Vector{Int},
-    bond::Pair{SubTreeVertex, SubTreeVertex},
-    IJkey::Pair{SubTreeVertex, SubTreeVertex},
-    subloclkey::Pair{Int, Int},
+    bond::Pair{SubTreeVertex,SubTreeVertex},
+    IJkey::Pair{SubTreeVertex,SubTreeVertex},
+    subloclkey::Pair{Int,Int},
 )
     Ikey, Jkey = IJkey
     subIkey, subJkey = subloclkey
@@ -37,7 +37,7 @@ function generate_pivot_candidates(
 end
 
 function kronecker(
-    IJset::Dict{SubTreeVertex, Vector{MultiIndex}},
+    IJset::Dict{SubTreeVertex,Vector{MultiIndex}},
     subregions::SubTreeVertex,  # original subregions order
     site::Int,          # direct connected site
     localdim::Int,
@@ -45,5 +45,8 @@ function kronecker(
     site_index = findfirst(==(site), subregions)
     filtered_subregions = filter(x -> x ≠ Set([site]), subregions)
     pivotset = IJset[subregions]
-    return MultiIndex[[is[1:site_index-1]..., j, is[site_index+1:end]...] for is in pivotset, j in 1:localdim][:]
+    return MultiIndex[
+        [is[1:site_index-1]..., j, is[site_index+1:end]...] for is in pivotset,
+        j = 1:localdim
+    ][:]
 end

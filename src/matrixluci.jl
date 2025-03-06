@@ -10,9 +10,9 @@ function MatrixLUCI(
     ::Type{ValueType},
     f,
     matrixsize::Tuple{Int,Int},
-    I0::AbstractVector{Int}=Int[],
-    J0::AbstractVector{Int}=Int[];
-    kwargs...
+    I0::AbstractVector{Int} = Int[],
+    J0::AbstractVector{Int} = Int[];
+    kwargs...,
 ) where {ValueType}
     MatrixLUCI{ValueType}(rrlu(ValueType, f, matrixsize, I0, J0; kwargs...))
 end
@@ -38,18 +38,18 @@ function colindices(luci::MatrixLUCI{T}) where {T}
 end
 
 function colmatrix(luci::MatrixLUCI{T}) where {T}
-    return left(luci.lu) * right(luci.lu, permute=false)[:, 1:npivots(luci)]
+    return left(luci.lu) * right(luci.lu, permute = false)[:, 1:npivots(luci)]
 end
 
 function rowmatrix(luci::MatrixLUCI{T}) where {T}
-    return left(luci.lu, permute=false)[1:npivots(luci), :] * right(luci.lu)
+    return left(luci.lu, permute = false)[1:npivots(luci), :] * right(luci.lu)
 end
 
 function colstimespivotinv(luci::MatrixLUCI{T}) where {T}
     n = npivots(luci)
     result = Matrix{T}(I, size(luci, 1), n)
     if n < size(luci, 1)
-        L = left(luci.lu; permute=false)
+        L = left(luci.lu; permute = false)
         result[n+1:end, :] = L[n+1:end, :] / LowerTriangular(L[1:n, :])
     end
     result[luci.lu.rowpermutation, :] = result
@@ -60,7 +60,7 @@ function pivotinvtimesrows(luci::MatrixLUCI{T}) where {T}
     n = npivots(luci)
     result = Matrix{T}(I, n, size(luci, 2))
     if n < size(luci, 2)
-        U = right(luci.lu; permute=false)
+        U = right(luci.lu; permute = false)
         result[:, n+1:end] = UpperTriangular(U[:, 1:n]) \ U[:, n+1:end]
     end
     result[:, luci.lu.colpermutation] = result
