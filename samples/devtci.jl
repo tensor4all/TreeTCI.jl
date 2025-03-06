@@ -15,8 +15,7 @@ function main()
     f(v) = 1 / (1 + v' * v)
     tolerance = 1e-8
 
-    mpn, ranks, errors =
-        TreeTCI.TCI.crossinterpolate2(Float64, f, localdims; tolerance = tolerance)
+    mpn, ranks, errors = TreeTCI.TCI.crossinterpolate2(Float64, f, localdims; tolerance = tolerance)
     ttn, ranks, errors = TreeTCI.crossinterpolate(Float64, f, localdims, g)
     @show f([1, 1, 1, 1, 1, 1, 1])
     @show mpn([1, 1, 1, 1, 1, 1, 1])

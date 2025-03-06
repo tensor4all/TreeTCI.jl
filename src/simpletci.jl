@@ -376,29 +376,24 @@ function fillsitetensors!(
                 common_elements_vq = intersect(bonds_, adjacent_bonds_vq)
 
                 if isempty(common_elements_vp)
-                    vfs = [vp]
-                    adjacent_bonds = [adjacent_bonds_vp]
+                    vf = vp
+                    adjacent_bonds = adjacent_bonds_vp
                 elseif isempty(common_elements_vq)
-                    vfs = [vq]
-                    adjacent_bonds = [adjacent_bonds_vq]
+                    vf = vq
+                    adjacent_bonds = adjacent_bonds_vq
                 end
             else
-                vfs = [vp, vq]
-                adjacent_bonds = [adjacent_bonds_vp, adjacent_bonds_vq]
+                vf = vp
+                adjacent_bonds = adjacent_bonds_vp
+                InOutbonds, InOutkeys = inoutbondskeys(tci.g, tci.regionbonds, distances, vf, adjacent_bonds)
+                setsitetensor!(tci, vf, bond, InOutbonds, InOutkeys, f; core=true)
+
+                vf = vq
+                adjacent_bonds = adjacent_bonds_vq
             end
 
-            for (vf, adjacent_bond) in zip(vfs, adjacent_bonds)
-                Inbonds = intersect(
-                    adjacent_bond,
-                    filter(b -> distances[b] == d + 1, keys(tci.regionbonds)),
-                )
-                Outbonds = intersect(
-                    adjacent_bond,
-                    filter(b -> distances[b] == d, keys(tci.regionbonds)),
-                )
-                Inkeys = bondtokey(tci.g, vf, Inbonds, tci.regionbonds)
-                Outkeys = bondtokey(tci.g, vf, Outbonds, tci.regionbonds)
-                setsitetensor!(tci, vf, bond, Inbonds => Outbonds, Inkeys => Outkeys, f)
+            InOutbonds, InOutkeys = inoutbondskeys(tci.g, tci.regionbonds, distances, vf, adjacent_bonds)
+            setsitetensor!(tci, vf, bond, InOutbonds, InOutkeys, f)
             end
         end
     end
@@ -517,7 +512,8 @@ function setsitetensor!(
     bond::Pair{SubTreeVertex,SubTreeVertex},
     InOutbonds,
     InOutkeys,
-    f,
+    f;
+    core=false,
 ) where {ValueType}
     Inkeys, Outkeys = InOutkeys
     Inbonds, Outbonds = InOutbonds
@@ -530,7 +526,7 @@ function setsitetensor!(
     )
     updatemaxsample!(tci, Pi1)
 
-    if isempty(Inkeys)
+    if isempty(Inkeys) || core
         setsitetensor!(tci, site, InOutbonds, InOutkeys, Pi1)
         return tci.sitetensors[site]
     end
@@ -766,4 +762,18 @@ function pushunique!(collection, items...)
     for item in items
         pushunique!(collection, item)
     end
+end
+
+function inoutbondskeys(g, regionbonds, distances, vf, adjacent_bonds)
+    Inbonds = intersect(
+        adjacent_bond,
+        filter(b -> distances[b] == d + 1, keys(regionbonds)),
+    )
+    Outbonds = intersect(
+        adjacent_bond,
+        filter(b -> distances[b] == d, keys(regionbonds)),
+    )
+    Inkeys = bondtokey(g, vf, Inbonds, regionbonds)
+    Outkeys = bondtokey(g, vf, Outbonds, regionbonds)
+    return (Inbonds => Outbonds), (Inkeys => Outkeys)
 end
