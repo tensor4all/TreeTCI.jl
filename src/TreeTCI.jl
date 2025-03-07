@@ -9,6 +9,7 @@ import SimpleTensorNetworks: TensorNetwork, IndexedArray, Index, complete_contra
 include("simpletci_utils.jl")
 include("abstracttreetensornetwork.jl")
 include("treetensornetwork.jl")
-include("pivotcandidateproper.jl")
 include("simpletci.jl")
+include("crossinterpolate.jl")
+include("pivotcandidateproper.jl")
 end
