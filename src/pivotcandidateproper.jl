@@ -15,7 +15,7 @@ function generate_pivot_candidates(
     ::DefaultPivotCandidateProper,
     g::NamedGraph,
     IJset::Dict{SubTreeVertex,Vector{MultiIndex}},
-    IJset_history::Dict{SubTreeVertex,Vector{Vector{MultiIndex}}},
+    InIJkeys::Pair{Vector{SubTreeVertex},Vector{SubTreeVertex}},
     extraIJset::Dict{SubTreeVertex,Vector{MultiIndex}},
     regionbonds::Dict{Pair{SubTreeVertex,SubTreeVertex},NamedEdge},
     localdims::Vector{Int},
@@ -25,26 +25,40 @@ function generate_pivot_candidates(
 )
     Ikey, Jkey = IJkey
     subIkey, subJkey = subloclkey
+    InIkey, InJkey = InIJkeys
+
     # Generate base index sets for both sides
-    Iset = kronecker(IJset, Ikey, subIkey, localdims[subIkey])
-    Jset = kronecker(IJset, Jkey, subJkey, localdims[subJkey])
+    Iset = kronecker(IJset, Ikey, InIkey, subIkey, localdims[subIkey])
+    Jset = kronecker(IJset, Jkey, InJkey, subJkey, localdims[subJkey])
 
     # Combine with extra indices if available
-    Icombined = union(Iset, get(extraIJset, Ikey, MultiIndex[]))
-    Jcombined = union(Jset, get(extraIJset, Jkey, MultiIndex[]))
-
+    Icombined = union(Iset, extraIJset[Ikey])
+    Jcombined = union(Jset, extraIJset[Jkey])
     return (Icombined, Jcombined)
 end
 
 function kronecker(
     IJset::Dict{SubTreeVertex,Vector{MultiIndex}},
-    subregions::SubTreeVertex,  # original subregions order
+    Outkey::SubTreeVertex,  # original subregions order
+    Inkeys::Vector{SubTreeVertex},  # original subregions order
     site::Int,          # direct connected site
     localdim::Int,
 )
-    site_index = findfirst(==(site), subregions)
-    filtered_subregions = filter(x -> x ≠ Set([site]), subregions)
-    pivotset = IJset[subregions]
+    pivotset = MultiIndex[]
+    for indices in Iterators.product((IJset[inkey] for inkey in Inkeys)...)
+        indexset = zeros(Int, length(Outkey))
+        for (inkey, index) in zip(Inkeys, indices)
+            for (idx, key) in enumerate(inkey)
+                id = findfirst(==(key), Outkey)
+                indexset[id] = index[idx]
+            end
+        end
+        push!(pivotset, indexset)
+    end
+
+    site_index = findfirst(==(site), Outkey)
+    filtered_subregions = filter(x -> x ≠ Set([site]), Outkey)
+
     return MultiIndex[
         [is[1:site_index-1]..., j, is[site_index+1:end]...] for is in pivotset,
         j = 1:localdim

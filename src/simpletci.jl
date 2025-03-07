@@ -1,10 +1,10 @@
 using Base: SimpleLogger
 
-mutable struct SimpleTCI{ValueType}
+mutable struct SimpleTCI{ValueType} <: AbstractTreeTensorNetwork{ValueType}
     IJset::Dict{SubTreeVertex,Vector{MultiIndex}}
     localdims::Vector{Int}
     g::NamedGraph
-    sitetensors::Dict{Int,Pair{Array{ValueType},Vector{NamedEdge}}}
+    sitetensors::Vector{Pair{Array{ValueType},Vector{NamedEdge}}}
     regionbonds::Dict{Pair{SubTreeVertex,SubTreeVertex},NamedEdge}
     #"Error estimate per bond by 2site sweep."
     bonderrors::Dict{Pair{SubTreeVertex,SubTreeVertex},Float64} # key is the bond id
@@ -12,7 +12,7 @@ mutable struct SimpleTCI{ValueType}
     pivoterrors::Vector{Float64} # key is the bond id
     #"Maximum sample for error normalization."
     maxsamplevalue::Float64
-    IJset_history::Dict{SubTreeVertex,Vector{Vector{MultiIndex}}}
+    IJset_history::Vector{Dict{SubTreeVertex,Vector{MultiIndex}}}
 
     function SimpleTCI{ValueType}(localdims::Vector{Int}, g::NamedGraph) where {ValueType}
         length(localdims) > 1 || error("localdims should have at least 2 elements!")
@@ -28,7 +28,7 @@ mutable struct SimpleTCI{ValueType}
         end
 
         # make an IndexedArray for each verticec
-        sitetensors = Dict{Int,Pair{Array{ValueType},Vector{NamedEdge}}}()
+        sitetensors = Vector{Pair{Array{ValueType},Vector{NamedEdge}}}(undef, length(vertices(g)))
         for v in vertices(g)
             dims = [localdims[v]; [0 for e in edges(g) if src(e) == v || dst(e) == v]...]
             sitetensors[v] =
@@ -47,7 +47,7 @@ mutable struct SimpleTCI{ValueType}
             bonderrors,
             Float64[],
             0.0,                                                   # maxsamplevalue
-            Dict{SubTreeVertex,Vector{Vector{MultiIndex}}}(),       # IJset_history
+            Vector{Dict{SubTreeVertex,Vector{MultiIndex}}}(),       # IJset_history
         )
     end
 end
@@ -93,6 +93,8 @@ function addglobalpivots!(
             pushunique!(tci.IJset[Jset_key], [pivot[j] for j in Jset_key])
         end
     end
+
+    tci.IJset[[i for i = 1:length(tci.localdims)]] = Int[]
 
     if length(pivots) > 0
         invalidatesitetensors!(tci)
@@ -206,7 +208,6 @@ function optimize!(
             abstol = abstol,
             maxbonddim = maxbonddim,
             pivotsearch = pivotsearch,
-            strictlynested = strictlynested,
             verbosity = verbosity,
             sweepstrategy = sweepstrategy,
             fillsitetensors = true,
@@ -229,7 +230,6 @@ function optimize!(
             )
             flush(stdout)
         end
-
     end
 
     errornormalization = normalizeerror ? tci.maxsamplevalue : 1.0
@@ -251,8 +251,7 @@ function sweep2site!(
     sweepstrategy::Symbol = :backandforth,
     pivotsearch::Symbol = :full,
     verbosity::Int = 0,
-    strictlynested::Bool = false,
-    fillsitetensors::Bool = true,
+    fillsitetensors::Bool = false,
 ) where {ValueType}
     invalidatesitetensors!(tci)
 
@@ -281,25 +280,16 @@ function sweep2site!(
 
     for iter = iter1:iter1+niter-1
         extraIJset = Dict(key => MultiIndex[] for key in keys(tci.IJset))
-        if !strictlynested && length(tci.IJset_history) > 0
-            extraIJset =
-                Dict(key => tci.IJset_history[key][end] for key in keys(tci.IJset_history))
+        if length(tci.IJset_history) > 0
+            extraIJset = tci.IJset_history[end]
         end
 
-        for key in keys(tci.IJset)
-            if !haskey(tci.IJset_history, key)
-                tci.IJset_history[key] = [deepcopy(tci.IJset[key])]
-            else
-                push!(tci.IJset_history[key], deepcopy(tci.IJset[key]))
-            end
-        end
+        push!(tci.IJset_history, deepcopy(tci.IJset))
+
         flushpivoterror!(tci)
 
         # Init flags
-        flags = Dict{Int,Bool}()
-        for key in keys(invariantbondids)
-            flags[key] = 0
-        end
+        flags = Dict(keys(invariantbondids) .=> 0)
 
         # Sweep until all bonds are applied.
         while true
@@ -326,7 +316,7 @@ function sweep2site!(
             incomings = bondcandidates(tci.g, last(center_info), tci.regionbonds)
             # Update flags. However, the center bond is not applied.
             if all(flags[reverse_invariantbondids[c]] == 1 for c in incomings) &&
-               center_id != origin_id
+                center_id != origin_id
                 flags[center_id] = 1
             end
 
@@ -334,6 +324,7 @@ function sweep2site!(
             # pivot candidates
             center_bond = first(center_info)
             center_id = reverse_invariantbondids[center_bond]
+
             # Update the pivot at the center bond.
             updatepivots!(
                 tci,
@@ -342,6 +333,7 @@ function sweep2site!(
                 abstol = abstol,
                 maxbonddim = maxbonddim,
                 verbosity = verbosity,
+                extraIJset = extraIJset,
             )
         end
     end
@@ -382,18 +374,18 @@ function fillsitetensors!(
                     vf = vq
                     adjacent_bonds = adjacent_bonds_vq
                 end
+                InOutbonds, InOutkeys = inoutbondskeys(tci.g, tci.regionbonds, distances, d, vf, adjacent_bonds)
+                setsitetensor!(tci, vf, bond, InOutbonds, InOutkeys, f)
             else
                 vf = vp
                 adjacent_bonds = adjacent_bonds_vp
-                InOutbonds, InOutkeys = inoutbondskeys(tci.g, tci.regionbonds, distances, vf, adjacent_bonds)
-                setsitetensor!(tci, vf, bond, InOutbonds, InOutkeys, f; core=true)
+                InOutbonds, InOutkeys = inoutbondskeys(tci.g, tci.regionbonds, distances, d, vf, adjacent_bonds)
+                setsitetensor!(tci, vf, bond, InOutbonds, InOutkeys, f)
 
                 vf = vq
                 adjacent_bonds = adjacent_bonds_vq
-            end
-
-            InOutbonds, InOutkeys = inoutbondskeys(tci.g, tci.regionbonds, distances, vf, adjacent_bonds)
-            setsitetensor!(tci, vf, bond, InOutbonds, InOutkeys, f)
+                InOutbonds, InOutkeys = inoutbondskeys(tci.g, tci.regionbonds, distances, d, vf, adjacent_bonds)
+                setsitetensor!(tci, vf, bond, InOutbonds, InOutkeys, f; core=true)
             end
         end
     end
@@ -418,26 +410,27 @@ function updatepivots!(
     abstol::Float64 = 0.0,
     maxbonddim::Int = typemax(Int),
     verbosity::Int = 0,
+    extraIJset::Dict{SubTreeVertex,Vector{MultiIndex}} = Dict{SubTreeVertex,Vector{MultiIndex}}(),
 ) where {F,ValueType}
     invalidatesitetensors!(tci)
     N = length(tci.localdims)
 
     vp, vq = separatevertices(tci.g, tci.regionbonds[bond])
+
+    distances = bonddistances(tci.g, tci.regionbonds, bond)
+    adjacent_bonds_vp = adjacentbonds(tci.g, vp, tci.regionbonds)
+    InOutbondsJ, InOutkeysJ = inoutbondskeys(tci.g, tci.regionbonds, distances, 0, vp, adjacent_bonds_vp)
+    adjacent_bonds_vq = adjacentbonds(tci.g, vq, tci.regionbonds)
+    InOutbondsI, InOutkeysI = inoutbondskeys(tci.g, tci.regionbonds, distances, 0, vq, adjacent_bonds_vq)
+
     Ikey, subIkey = subtreevertices(tci.g, vp => vq), vq
     Jkey, subJkey = subtreevertices(tci.g, vq => vp), vp
-
-    # extract last histroy if not strictly nested
-    extraIJset = Dict(key => MultiIndex[] for key in keys(tci.IJset))
-    if length(tci.IJset_history) > 0
-        extraIJset =
-            Dict(key => tci.IJset_history[key][end] for key in keys(tci.IJset_history))
-    end
 
     Icombined, Jcombined = generate_pivot_candidates(
         DefaultPivotCandidateProper(),
         tci.g,
         tci.IJset,
-        tci.IJset_history,
+        (first(InOutkeysI) => first(InOutkeysJ)),
         extraIJset,
         tci.regionbonds,
         tci.localdims,
@@ -463,9 +456,10 @@ function updatepivots!(
     t2 = time_ns()
 
     updatemaxsample!(tci, Pi)
+
     luci = TCI.MatrixLUCI(Pi, reltol = reltol, abstol = abstol, maxrank = maxbonddim)
     # TODO: we will implement luci according to optimal index subsets by following step
-    # 1. Compute the optimal index subsets (We alsoneed these indices to set new pivots)
+    # 1. Compute the optimal index subsets (We also need the indices to set new pivots)
     # 2. Reshape the Pi matrix by the optimal index subsets
     # 3. Compute the LUCI by the reshaped Pi matrix
 
@@ -504,6 +498,7 @@ function setsitetensor!(
             [tci.regionbonds[bond] for bond in Outbonds],
         )
     )
+    nothing
 end
 
 function setsitetensor!(
@@ -526,20 +521,17 @@ function setsitetensor!(
     )
     updatemaxsample!(tci, Pi1)
 
-    if isempty(Inkeys) || core
+    if core
         setsitetensor!(tci, site, InOutbonds, InOutkeys, Pi1)
         return tci.sitetensors[site]
     end
 
-
     p, q = separatevertices(tci.g, tci.regionbonds[bond])
-    I1key = SubTreeVertex()
     if p == site
         I1key = subtreevertices(tci.g, q => p)
     elseif q == site
         I1key = subtreevertices(tci.g, p => q)
     end
-
 
     P = reshape(
         filltensor(ValueType, f, tci.localdims, tci.IJset, [I1key], Outkeys, Val(0)),
@@ -547,9 +539,8 @@ function setsitetensor!(
         prod([length(tci.IJset[key]) for key in Outkeys]),
     )
     length(tci.IJset[I1key]) == sum([length(tci.IJset[key]) for key in Outkeys]) || error("Pivot matrix at bond $(site) is not square!")
-
     Tmat = transpose(transpose(P) \ transpose(Pi1))
-    tci.sitetensors[site] =
+    tci.sitetensors[site] = (
         reshape(
             Tmat,
             tci.localdims[site],
@@ -559,6 +550,7 @@ function setsitetensor!(
             [tci.regionbonds[bond] for bond in Inbonds],
             [tci.regionbonds[bond] for bond in Outbonds],
         )
+    )
     return tci.sitetensors[site]
 end
 
@@ -601,12 +593,7 @@ function filltensor(
     Inkeys::Vector{SubTreeVertex},
     Outkeys::Vector{SubTreeVertex},
     ::Val{M},
-)::Array{ValueType,M + 2} where {ValueType,M}
-
-    if prod([length(first(IJset[key])) for key in Inkeys]) * prod([length(first(IJset[key])) for key in Outkeys]) ==
-       0
-        return Array{ValueType,2}(undef, ntuple(i -> 0, M + 2)...)
-    end
+)::Array{ValueType} where {ValueType,M}
     N = length(localdims)
     nin = sum([length(first(IJset[key])) for key in Inkeys])
     nout = sum([length(first(IJset[key])) for key in Outkeys])
@@ -619,8 +606,8 @@ function filltensor(
         all(i ∉ IJkey for IJkey in Inkeys) && all(i ∉ IJkey for IJkey in Outkeys)
     ]
     expected_size = (
-        prod([length(IJset[key]) for key in Inkeys]),
         Clocaldims...,
+        prod([length(IJset[key]) for key in Inkeys]),
         prod([length(IJset[key]) for key in Outkeys]),
     )
     return reshape(
@@ -637,12 +624,7 @@ function _call(
     Inkeys::Vector{SubTreeVertex},
     Outkeys::Vector{SubTreeVertex},
     ::Val{M},
-)::Array{V,M + 2} where {V,M}
-
-    if prod([length(first(IJset[key])) for key in Inkeys]) * prod([length(first(IJset[key])) for key in Outkeys]) ==
-       0
-        return Array{V,M + 2}(undef, ntuple(i -> 0, M + 2)...)
-    end
+)::Array{V} where {V,M}
     N = length(localdims)
     nin = prod([length(first(IJset[key])) for key in Inkeys])
     nout = prod([length(first(IJset[key])) for key in Outkeys])
@@ -657,40 +639,35 @@ function _call(
     indexset = MultiIndex(undef, L)
     result = Array{V,3}(
         undef,
-        prod([length(IJset[key]) for key in Inkeys]),
         prod(Clocaldims),
+        prod([length(IJset[key]) for key in Inkeys]),
         prod([length(IJset[key]) for key in Outkeys]),
     )
-    for inkey in Inkeys
-        for (i, lindex) in enumerate(IJset[inkey])
-            for (c, cindex) in
-                enumerate(Iterators.product(ntuple(x -> 1:Clocaldims[x], M)...))
-                for outkey in Outkeys
-                    for (j, rindex) in enumerate(IJset[outkey])
-                        indexset = zeros(Int, N)
-                        for (idx, key) in enumerate(inkey)
-                            indexset[key] = lindex[idx]
-                        end
 
-                        for (idx, key) in enumerate(Ckey)
-                            indexset[key] = cindex[idx]
-                        end
+    for (c, cindex) in enumerate(Iterators.product(ntuple(x -> 1:Clocaldims[x], M)...))
+        indexset = zeros(Int, N)
+        for (idx, key) in enumerate(Ckey)
+            indexset[key] = cindex[idx]
+        end
+        for (i, lindices) in enumerate(Iterators.product((IJset[inkey] for inkey in Inkeys)...))
+            for (inkey, index) in zip(Inkeys, lindices)
+                for (idx, key) in enumerate(inkey)
+                    indexset[key] = index[idx]
+                end
+            end
 
-                        for (idx, key) in enumerate(outkey)
-                            indexset[key] = rindex[idx]
-                        end
-                        result[i, c, j] = f(indexset)
+            for (j, rindices) in enumerate(Iterators.product((IJset[outkey] for outkey in Outkeys)...))
+                for (outkey, index) in zip(Outkeys, rindices)
+                    for (idx, key) in enumerate(outkey)
+                        indexset[key] = index[idx]
                     end
                 end
+                result[c, i, j] = f(indexset)
             end
         end
     end
-    return reshape(
-        result,
-        prod([length(IJset[key]) for key in Inkeys]),
-        Clocaldims...,
-        prod([length(IJset[key]) for key in Outkeys]),
-    )
+
+    return result
 end
 
 function pivoterror(tci::SimpleTCI{T}) where {T}
@@ -764,13 +741,13 @@ function pushunique!(collection, items...)
     end
 end
 
-function inoutbondskeys(g, regionbonds, distances, vf, adjacent_bonds)
+function inoutbondskeys(g, regionbonds, distances, d, vf, adjacent_bonds)
     Inbonds = intersect(
-        adjacent_bond,
+        adjacent_bonds,
         filter(b -> distances[b] == d + 1, keys(regionbonds)),
     )
     Outbonds = intersect(
-        adjacent_bond,
+        adjacent_bonds,
         filter(b -> distances[b] == d, keys(regionbonds)),
     )
     Inkeys = bondtokey(g, vf, Inbonds, regionbonds)

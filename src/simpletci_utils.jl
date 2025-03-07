@@ -118,8 +118,7 @@ function bondcandidates(
     neighbors = [cand for cand in neighbors if cand != parent]
     for cand in neighbors
         for (key, item) in regionbonds
-            if (src(item) == child && dst(item) == cand) ||
-               (src(item) == cand && dst(item) == child)
+            if (src(item) == child && dst(item) == cand) || (src(item) == cand && dst(item) == child)
                 push!(candidates, key)
                 break
             end

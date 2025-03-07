@@ -17,9 +17,9 @@ function main()
 
     mpn, ranks, errors = TreeTCI.TCI.crossinterpolate2(Float64, f, localdims; tolerance = tolerance)
     ttn, ranks, errors = TreeTCI.crossinterpolate(Float64, f, localdims, g)
-    @show f([1, 1, 1, 1, 1, 1, 1])
-    @show mpn([1, 1, 1, 1, 1, 1, 1])
-    @show ttn([1, 1, 1, 1, 1, 1, 1])
+    @show f([1, 1, 1, 1, 2, 1, 1])
+    @show mpn([1, 1, 1, 1, 2, 1, 1])
+    @show ttn([1, 1, 1, 1, 2, 1, 1])
 end
 
 main()
