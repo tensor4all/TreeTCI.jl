@@ -28,7 +28,8 @@ mutable struct SimpleTCI{ValueType} <: AbstractTreeTensorNetwork{ValueType}
         end
 
         # make an IndexedArray for each verticec
-        sitetensors = Vector{Pair{Array{ValueType},Vector{NamedEdge}}}(undef, length(vertices(g)))
+        sitetensors =
+            Vector{Pair{Array{ValueType},Vector{NamedEdge}}}(undef, length(vertices(g)))
         for v in vertices(g)
             dims = [localdims[v]; [0 for e in edges(g) if src(e) == v || dst(e) == v]...]
             sitetensors[v] =
@@ -316,7 +317,7 @@ function sweep2site!(
             incomings = bondcandidates(tci.g, last(center_info), tci.regionbonds)
             # Update flags. However, the center bond is not applied.
             if all(flags[reverse_invariantbondids[c]] == 1 for c in incomings) &&
-                center_id != origin_id
+               center_id != origin_id
                 flags[center_id] = 1
             end
 
@@ -374,18 +375,21 @@ function fillsitetensors!(
                     vf = vq
                     adjacent_bonds = adjacent_bonds_vq
                 end
-                InOutbonds, InOutkeys = inoutbondskeys(tci.g, tci.regionbonds, distances, d, vf, adjacent_bonds)
+                InOutbonds, InOutkeys =
+                    inoutbondskeys(tci.g, tci.regionbonds, distances, d, vf, adjacent_bonds)
                 setsitetensor!(tci, vf, bond, InOutbonds, InOutkeys, f)
             else
                 vf = vp
                 adjacent_bonds = adjacent_bonds_vp
-                InOutbonds, InOutkeys = inoutbondskeys(tci.g, tci.regionbonds, distances, d, vf, adjacent_bonds)
+                InOutbonds, InOutkeys =
+                    inoutbondskeys(tci.g, tci.regionbonds, distances, d, vf, adjacent_bonds)
                 setsitetensor!(tci, vf, bond, InOutbonds, InOutkeys, f)
 
                 vf = vq
                 adjacent_bonds = adjacent_bonds_vq
-                InOutbonds, InOutkeys = inoutbondskeys(tci.g, tci.regionbonds, distances, d, vf, adjacent_bonds)
-                setsitetensor!(tci, vf, bond, InOutbonds, InOutkeys, f; core=true)
+                InOutbonds, InOutkeys =
+                    inoutbondskeys(tci.g, tci.regionbonds, distances, d, vf, adjacent_bonds)
+                setsitetensor!(tci, vf, bond, InOutbonds, InOutkeys, f; core = true)
             end
         end
     end
@@ -410,7 +414,10 @@ function updatepivots!(
     abstol::Float64 = 0.0,
     maxbonddim::Int = typemax(Int),
     verbosity::Int = 0,
-    extraIJset::Dict{SubTreeVertex,Vector{MultiIndex}} = Dict{SubTreeVertex,Vector{MultiIndex}}(),
+    extraIJset::Dict{SubTreeVertex,Vector{MultiIndex}} = Dict{
+        SubTreeVertex,
+        Vector{MultiIndex},
+    }(),
 ) where {F,ValueType}
     invalidatesitetensors!(tci)
     N = length(tci.localdims)
@@ -419,9 +426,11 @@ function updatepivots!(
 
     distances = bonddistances(tci.g, tci.regionbonds, bond)
     adjacent_bonds_vp = adjacentbonds(tci.g, vp, tci.regionbonds)
-    InOutbondsJ, InOutkeysJ = inoutbondskeys(tci.g, tci.regionbonds, distances, 0, vp, adjacent_bonds_vp)
+    InOutbondsJ, InOutkeysJ =
+        inoutbondskeys(tci.g, tci.regionbonds, distances, 0, vp, adjacent_bonds_vp)
     adjacent_bonds_vq = adjacentbonds(tci.g, vq, tci.regionbonds)
-    InOutbondsI, InOutkeysI = inoutbondskeys(tci.g, tci.regionbonds, distances, 0, vq, adjacent_bonds_vq)
+    InOutbondsI, InOutkeysI =
+        inoutbondskeys(tci.g, tci.regionbonds, distances, 0, vq, adjacent_bonds_vq)
 
     Ikey, subIkey = subtreevertices(tci.g, vp => vq), vq
     Jkey, subJkey = subtreevertices(tci.g, vq => vp), vp
@@ -508,7 +517,7 @@ function setsitetensor!(
     InOutbonds,
     InOutkeys,
     f;
-    core=false,
+    core = false,
 ) where {ValueType}
     Inkeys, Outkeys = InOutkeys
     Inbonds, Outbonds = InOutbonds
@@ -649,14 +658,16 @@ function _call(
         for (idx, key) in enumerate(Ckey)
             indexset[key] = cindex[idx]
         end
-        for (i, lindices) in enumerate(Iterators.product((IJset[inkey] for inkey in Inkeys)...))
+        for (i, lindices) in
+            enumerate(Iterators.product((IJset[inkey] for inkey in Inkeys)...))
             for (inkey, index) in zip(Inkeys, lindices)
                 for (idx, key) in enumerate(inkey)
                     indexset[key] = index[idx]
                 end
             end
 
-            for (j, rindices) in enumerate(Iterators.product((IJset[outkey] for outkey in Outkeys)...))
+            for (j, rindices) in
+                enumerate(Iterators.product((IJset[outkey] for outkey in Outkeys)...))
                 for (outkey, index) in zip(Outkeys, rindices)
                     for (idx, key) in enumerate(outkey)
                         indexset[key] = index[idx]
@@ -742,14 +753,9 @@ function pushunique!(collection, items...)
 end
 
 function inoutbondskeys(g, regionbonds, distances, d, vf, adjacent_bonds)
-    Inbonds = intersect(
-        adjacent_bonds,
-        filter(b -> distances[b] == d + 1, keys(regionbonds)),
-    )
-    Outbonds = intersect(
-        adjacent_bonds,
-        filter(b -> distances[b] == d, keys(regionbonds)),
-    )
+    Inbonds =
+        intersect(adjacent_bonds, filter(b -> distances[b] == d + 1, keys(regionbonds)))
+    Outbonds = intersect(adjacent_bonds, filter(b -> distances[b] == d, keys(regionbonds)))
     Inkeys = bondtokey(g, vf, Inbonds, regionbonds)
     Outkeys = bondtokey(g, vf, Outbonds, regionbonds)
     return (Inbonds => Outbonds), (Inkeys => Outkeys)
