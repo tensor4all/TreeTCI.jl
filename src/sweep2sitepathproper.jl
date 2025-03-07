@@ -13,7 +13,9 @@ Default strategy that runs through within all indices of site tensor according t
 """
 function generate_sweep2site_path(
     ::DefaultSweep2sitePathProper,
-    tci::SimpleTCI{ValueType},
+    tci::SimpleTCI{ValueType};
+    origin_bond = undef,
+
 ) where {ValueType}
     bond_path = Vector{Pair{SubTreeVertex, SubTreeVertex}}()
 
@@ -39,6 +41,11 @@ function generate_sweep2site_path(
         end
     end
     center_id = origin_id
+
+    if origin_bond != undef
+        origin_id = reverse_invariantbondids[origin_bond]
+        center_id = origin_id
+    end
 
     # Init flags
     flags = Dict(keys(invariantbondids) .=> 0)
