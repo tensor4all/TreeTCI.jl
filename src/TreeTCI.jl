@@ -10,6 +10,7 @@ include("simpletci_utils.jl")
 include("abstracttreetensornetwork.jl")
 include("treetensornetwork.jl")
 include("simpletci.jl")
-include("crossinterpolate.jl")
 include("pivotcandidateproper.jl")
+include("sweep2sitepathproper.jl")
+include("crossinterpolate.jl")
 end
