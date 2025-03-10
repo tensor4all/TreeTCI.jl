@@ -8,20 +8,6 @@ function separatevertices(g::NamedGraph, edge::NamedEdge)
     return p, q
 end
 
-function adjacentbonds(
-    g::NamedGraph,
-    vertex::Int,
-    regionbonds::Dict{Pair{SubTreeVertex,SubTreeVertex},NamedEdge},
-)
-    bonds = []
-    for (key, edge) in regionbonds
-        if src(edge) == vertex || dst(edge) == vertex
-            push!(bonds, key)
-        end
-    end
-    return bonds
-end
-
 function subtreevertices(
     g::NamedGraph,
     parent_children::Pair{Int,<:Union{Int,Vector{Int}}},
@@ -46,6 +32,20 @@ function subregionvertices(g::NamedGraph, edge::NamedEdge)
     Iregions = subtreevertices(g, q => p)
     Jregions = subtreevertices(g, p => q)
     return Pair(Iregions, Jregions)
+end
+
+function adjacentbonds(
+    g::NamedGraph,
+    vertex::Int,
+    regionbonds::Dict{Pair{SubTreeVertex,SubTreeVertex},NamedEdge},
+) ::Vector{Pair{SubTreeVertex,SubTreeVertex}}
+    bonds = []
+    for (key, edge) in regionbonds
+        if src(edge) == vertex || dst(edge) == vertex
+            push!(bonds, key)
+        end
+    end
+    return bonds
 end
 
 function bonddistances(
@@ -94,19 +94,6 @@ function distanceBFS(
     return distances
 end
 
-function bondinfocandidates(
-    g::NamedGraph,
-    regionbonds::Dict{Pair{SubTreeVertex,SubTreeVertex},NamedEdge},
-    center_bond::Pair{SubTreeVertex,SubTreeVertex},
-)
-    p, q = separatevertices(g, regionbonds[center_bond])
-    candidates = vcat(
-        [(c, q => p) for c in bondcandidates(g, p => q, regionbonds)],
-        [(c, p => q) for c in bondcandidates(g, q => p, regionbonds)],
-    )
-    return candidates
-end
-
 function bondcandidates(
     g::NamedGraph,
     parent_child::Pair{Int,Int},
@@ -144,4 +131,20 @@ function bondtokey(
         end
     end
     return keys
+end
+
+function inoutbondskeys(
+    g::NamedGraph,
+    regionbonds::Dict{Pair{SubTreeVertex, SubTreeVertex}, NamedEdge},
+    distances::Dict{Pair{SubTreeVertex, SubTreeVertex}, Int},
+    d::Int,
+    vf::Int,
+    adjacent_bonds::Vector{Pair{SubTreeVertex, SubTreeVertex}}
+)
+    Inbonds =
+        intersect(adjacent_bonds, filter(b -> distances[b] == d + 1, keys(regionbonds)))
+    Outbonds = intersect(adjacent_bonds, filter(b -> distances[b] == d, keys(regionbonds)))
+    Inkeys = bondtokey(g, vf, Inbonds, regionbonds)
+    Outkeys = bondtokey(g, vf, Outbonds, regionbonds)
+    return (Inbonds => Outbonds), (Inkeys => Outkeys)
 end

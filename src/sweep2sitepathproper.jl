@@ -87,3 +87,16 @@ function generate_sweep2site_path(
 
     return bond_path, invariantbondids[origin_id]
 end
+
+function bondinfocandidates(
+    g::NamedGraph,
+    regionbonds::Dict{Pair{SubTreeVertex,SubTreeVertex},NamedEdge},
+    center_bond::Pair{SubTreeVertex,SubTreeVertex},
+)
+    p, q = separatevertices(g, regionbonds[center_bond])
+    candidates = vcat(
+        [(c, q => p) for c in bondcandidates(g, p => q, regionbonds)],
+        [(c, p => q) for c in bondcandidates(g, q => p, regionbonds)],
+    )
+    return candidates
+end

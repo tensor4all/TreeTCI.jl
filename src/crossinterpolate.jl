@@ -569,12 +569,3 @@ function pushunique!(collection, items...)
         pushunique!(collection, item)
     end
 end
-
-function inoutbondskeys(g, regionbonds, distances, d, vf, adjacent_bonds)
-    Inbonds =
-        intersect(adjacent_bonds, filter(b -> distances[b] == d + 1, keys(regionbonds)))
-    Outbonds = intersect(adjacent_bonds, filter(b -> distances[b] == d, keys(regionbonds)))
-    Inkeys = bondtokey(g, vf, Inbonds, regionbonds)
-    Outkeys = bondtokey(g, vf, Outbonds, regionbonds)
-    return (Inbonds => Outbonds), (Inkeys => Outkeys)
-end
