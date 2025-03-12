@@ -1,6 +1,5 @@
 
 module TreeTCI
-using UUIDs
 import Graphs
 import NamedGraphs:
     NamedGraph, NamedEdge, is_directed, outneighbors, has_edge, edges, vertices, src, dst, namedgraph_dijkstra_shortest_paths
