@@ -20,6 +20,7 @@ function evaluate(
         )
     end
     sitetensors = IndexedArray[]
+    # TODO: site tensorを作る関数を作成
     for (Tinfo, i) in zip(ttn.sitetensors, indexset)
         T, edges = Tinfo
         inds = (i, ntuple(_ -> :, ndims(T) - 1)...)

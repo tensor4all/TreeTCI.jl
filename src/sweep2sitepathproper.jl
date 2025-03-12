@@ -14,50 +14,37 @@ Default strategy that runs through within all indices of site tensor according t
 function generate_sweep2site_path(
     ::DefaultSweep2sitePathProper,
     tci::SimpleTCI{ValueType};
-    origin_bond = undef,
-
+    origin_edge = undef,
 ) where {ValueType}
-    bond_path = Vector{Pair{SubTreeVertex, SubTreeVertex}}()
+    edge_path = Vector{NamedEdge}()
 
     n = length(tci.localdims) # TODO: Implement for AbstractTreeTensorNetwork
 
-    # assigne the uuid for each bond
-    invariantbondids = Dict([i => key for (i, key) in enumerate(keys(tci.regionbonds))])
-    reverse_invariantbondids =
-        Dict([key => i for (i, key) in enumerate(keys(tci.regionbonds))])
-
     # choose the center bond id.
-    d = n
-    origin_id = undef
-    for (id, key) in invariantbondids
-        e = tci.regionbonds[key]
-        p, q = separatevertices(tci.g, e)
-        Iset = length(subtreevertices(tci.g, p => q))
-        Jset = length(subtreevertices(tci.g, q => p))
-        d_tmp = abs(Iset - Jset)
-        if d_tmp < d
-            d = d_tmp
-            origin_id = id
+    if origin_edge == undef
+        d = n
+        for e in edges(tci.g)
+            p, q = separatevertices(tci.g, e)
+            Iset = length(subtreevertices(tci.g, p => q))
+            Jset = length(subtreevertices(tci.g, q => p))
+            d_tmp = abs(Iset - Jset)
+            if d_tmp < d
+                d = d_tmp
+                origin_edge = e
+            end
         end
     end
-    center_id = origin_id
-
-    if origin_bond != undef
-        origin_id = reverse_invariantbondids[origin_bond]
-        center_id = origin_id
-    end
+    center_edge = origin_edge
 
     # Init flags
-    flags = Dict(keys(invariantbondids) .=> 0)
+    flags = Dict(e => 0 for e in edges(tci.g))
 
     while true
-        distances = bonddistances(tci.g, tci.regionbonds, invariantbondids[origin_id])
 
-        candidates =
-            bondinfocandidates(tci.g, tci.regionbonds, invariantbondids[center_id])
+        candidates = candidateedges(tci.g, center_edge)
         candidates = filter(
-            ((c, parent_child),) -> flags[reverse_invariantbondids[c]] == 0,
-            candidates,
+            e -> flags[e] == 0,
+            candidates
         )
 
         # If candidates is empty, exit while loop
@@ -65,38 +52,26 @@ function generate_sweep2site_path(
             break
         end
 
-        max_distance = maximum(distances[c] for (c, parent_child) in candidates)
-        candidates =
-            filter(((c, parent_child),) -> distances[c] == max_distance, candidates)
+        distances = distanceedges(tci.g, origin_edge)
+        max_distance = maximum(distances[e] for e in candidates)
+        candidates = filter(e -> distances[e] == max_distance, candidates)
 
-        center_info = first(candidates)
+        center_edge_ = first(candidates)
 
-        incomings = bondcandidates(tci.g, last(center_info), tci.regionbonds)
+        p, q = separatevertices(tci.g, center_edge)
+        v = center_edge_ in adjacentedges(tci.g, p) ? q : p #
+        incomings = [edge for edge in adjacentedges(tci.g, v) if edge != center_edge]
+
         # Update flags. However, the center bond is not applied.
-        if all(flags[reverse_invariantbondids[c]] == 1 for c in incomings) &&
-            center_id != origin_id
-            flags[center_id] = 1
+        if all(flags[e] == 1 for e in incomings) && center_edge != origin_edge
+            flags[center_edge] = 1
         end
 
         # pivot candidates
-        center_bond = first(center_info)
-        center_id = reverse_invariantbondids[center_bond]
+        center_edge = center_edge_
 
-        push!(bond_path, center_bond)
+        push!(edge_path, center_edge)
     end
 
-    return bond_path, invariantbondids[origin_id]
-end
-
-function bondinfocandidates(
-    g::NamedGraph,
-    regionbonds::Dict{Pair{SubTreeVertex,SubTreeVertex},NamedEdge},
-    center_bond::Pair{SubTreeVertex,SubTreeVertex},
-)
-    p, q = separatevertices(g, regionbonds[center_bond])
-    candidates = vcat(
-        [(c, q => p) for c in bondcandidates(g, p => q, regionbonds)],
-        [(c, p => q) for c in bondcandidates(g, q => p, regionbonds)],
-    )
-    return candidates
+    return edge_path
 end

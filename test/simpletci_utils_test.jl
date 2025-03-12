@@ -15,21 +15,38 @@ import NamedGraphs: NamedGraph, NamedEdge, add_edge!, edges, has_edge
 
     @testset "SubTreeVertex" begin
         e = NamedEdge(2 => 4)
-        v1, v2 = TreeTCI.separate_vertices(g, e)
+        v1, v2 = TreeTCI.separatevertices(g, e)
         @test v1 == 2
         @test v2 == 4
 
-        adjacent_bonds = TreeTCI.adjacent_bonds(g, v1)
-
-        Ivertices = TreeTCI.subtree_vertices(g, v2 => v1) # 4 -> 2
-        Jvertices = TreeTCI.subtree_vertices(g, v1 => v2) # 2 -> 4
+        Ivertices = TreeTCI.subtreevertices(g, v2 => v1) # 4 -> 2
+        Jvertices = TreeTCI.subtreevertices(g, v1 => v2) # 2 -> 4
 
         @test Ivertices == [1, 2, 3]
         @test Jvertices == [4, 5, 6, 7]
 
-        subregions = TreeTCI.subregion_vertices(g, e)
+        subregions = TreeTCI.subregionvertices(g, e)
         @test first(subregions) == [1, 2, 3]
         @test last(subregions) == [4, 5, 6, 7]
+
+
+        @test Set(TreeTCI.adjacentedges(g, 4)) == Set(
+            [NamedEdge(2 => 4), NamedEdge(4 => 5)]
+        )
+
+        @test Set(TreeTCI.candidateedges(g, NamedEdge(2 => 4))) == Set(
+            [NamedEdge(1 => 2), NamedEdge(2 => 3), NamedEdge(4 => 5)]
+        )
+
+        @test TreeTCI.distanceedges(g, NamedEdge(2 => 4)) == Dict(
+            NamedEdge(2 => 4) => 0,
+            NamedEdge(1 => 2) => 1,
+            NamedEdge(2 => 3) => 1,
+            NamedEdge(4 => 5) => 1,
+            NamedEdge(5 => 6) => 2,
+            NamedEdge(5 => 7) => 2,
+        )
+
     end
 
 end

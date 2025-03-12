@@ -14,29 +14,23 @@ Default strategy that runs through within all indices of site tensor according t
 function generate_pivot_candidates(
     ::DefaultPivotCandidateProper,
     tci::SimpleTCI{ValueType},
-    bond::Pair{SubTreeVertex,SubTreeVertex},
+    edge::NamedEdge,
     extraIJset::Dict{SubTreeVertex,Vector{MultiIndex}},
 ) where {ValueType}
 
-    vp, vq = separatevertices(tci.g, tci.regionbonds[bond])
-    Ikey, subIkey = subtreevertices(tci.g, vp => vq), vq
-    Jkey, subJkey = subtreevertices(tci.g, vq => vp), vp
+    vp, vq = separatevertices(tci.g, edge)
+    Ikey, subIkey = subtreevertices(tci.g, vq => vp), vp
+    Jkey, subJkey = subtreevertices(tci.g, vp => vq), vq
 
-    distances = bonddistances(tci.g, tci.regionbonds, bond)
+    adjacent_edges_vp = adjacentedges(tci.g, vp; combinededges=edge)
+    InIkeys = edgeInIJkeys(tci.g, vp, adjacent_edges_vp)
 
-    adjacent_bonds_vp = adjacentbonds(tci.g, vp, tci.regionbonds)
-    InOutbondsJ, InOutkeysJ =
-        inoutbondskeys(tci.g, tci.regionbonds, distances, 0, vp, adjacent_bonds_vp)
-
-    adjacent_bonds_vq = adjacentbonds(tci.g, vq, tci.regionbonds)
-    InOutbondsI, InOutkeysI =
-        inoutbondskeys(tci.g, tci.regionbonds, distances, 0, vq, adjacent_bonds_vq)
-
-    InIkey, InJkey = first(InOutkeysI), first(InOutkeysJ)
+    adjacent_edges_vq = adjacentedges(tci.g, vq; combinededges=edge)
+    InJkeys = edgeInIJkeys(tci.g, vq, adjacent_edges_vq)
 
     # Generate base index sets for both sides
-    Iset = kronecker(tci.IJset, Ikey, InIkey, subIkey, tci.localdims[subIkey])
-    Jset = kronecker(tci.IJset, Jkey, InJkey, subJkey, tci.localdims[subJkey])
+    Iset = kronecker(tci.IJset, Ikey, InIkeys, vp, tci.localdims[vp])
+    Jset = kronecker(tci.IJset, Jkey, InJkeys, vq, tci.localdims[vq])
 
     # Combine with extra indices if available
     Icombined = union(Iset, extraIJset[Ikey])

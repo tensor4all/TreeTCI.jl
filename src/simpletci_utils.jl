@@ -1,150 +1,207 @@
-MultiIndex = Vector{Int}
-SubTreeVertex = Vector{Int}
+function fillsitetensors(
+    tci::SimpleTCI{ValueType},
+    f;
+    center_vertex::Int = 0,
+) where {ValueType}
 
-function separatevertices(g::NamedGraph, edge::NamedEdge)
-    has_edge(g, edge) || error("The edge is not in the graph.")
-    p, q = src(edge), dst(edge)
-    p, q = p < q ? (p, q) : (q, p)
-    return p, q
-end
+    sitetensors = Vector{Pair{Array{ValueType},Vector{NamedEdge}}}(undef, length(vertices(tci.g)))
 
-function subtreevertices(
-    g::NamedGraph,
-    parent_children::Pair{Int,<:Union{Int,Vector{Int}}},
-)::Vector{Int}
-    parent, children = first(parent_children), last(parent_children)
-    if children isa Int
-        children = [children]
+    if center_vertex ∉ vertices(tci.g)
+        center_vertex = first(vertices(tci.g))
     end
-    grandchildren = []
-    for child in children
-        candidates = outneighbors(g, child)
-        candidates = [cand for cand in candidates if cand != parent]
-        append!(grandchildren, subtreevertices(g, child => candidates))
-        append!(grandchildren, [child])
-    end
-    sort!(grandchildren)
-    return grandchildren
-end
+    state = namedgraph_dijkstra_shortest_paths(tci.g, center_vertex)
 
-function subregionvertices(g::NamedGraph, edge::NamedEdge)
-    p, q = separatevertices(g, edge)
-    Iregions = subtreevertices(g, q => p)
-    Jregions = subtreevertices(g, p => q)
-    return Pair(Iregions, Jregions)
-end
-
-function adjacentbonds(
-    g::NamedGraph,
-    vertex::Int,
-    regionbonds::Dict{Pair{SubTreeVertex,SubTreeVertex},NamedEdge},
-) ::Vector{Pair{SubTreeVertex,SubTreeVertex}}
-    bonds = []
-    for (key, edge) in regionbonds
-        if src(edge) == vertex || dst(edge) == vertex
-            push!(bonds, key)
-        end
-    end
-    return bonds
-end
-
-function bonddistances(
-    g::NamedGraph,
-    regionbonds::Dict{Pair{SubTreeVertex,SubTreeVertex},NamedEdge},
-    origin_bond::Pair{SubTreeVertex,SubTreeVertex},
-)::Dict{Pair{SubTreeVertex,SubTreeVertex},Int}
-    p, q = separatevertices(g, regionbonds[origin_bond])
-    distances = Dict{Pair{SubTreeVertex,SubTreeVertex},Int}()
-    distances[origin_bond] = 0
-    distances = distanceBFS(g, p => q, distances, regionbonds)
-    distances = distanceBFS(g, q => p, distances, regionbonds)
-    return distances
-end
-
-function distanceBFS(
-    g::NamedGraph,
-    parent_children::Pair{Int,<:Union{Int,Vector{Int}}},
-    distances::Dict{Pair{SubTreeVertex,SubTreeVertex},Int},
-    regionbonds::Dict{Pair{SubTreeVertex,SubTreeVertex},NamedEdge},
-)::Dict{Pair{SubTreeVertex,SubTreeVertex},Int}
-    parent, children = first(parent_children), last(parent_children)
-    for child in children
-        parent_key = ""
-        for (key, item) in regionbonds
-            if (src(item) == parent && dst(item) == child) ||
-               (src(item) == child && dst(item) == parent)
-                parent_key = key
+    distances = state.dists
+    max_distance = maximum(distances[v] for v in vertices(tci.g))
+    for d = max_distance:-1:0
+        children = filter(v -> distances[v] == d, vertices(tci.g))
+        for child in children
+            # adjacent_edges = adjacentedges(tci.g, child)
+            parent = state.parents[child]
+            edge = filter(e -> src(e) == parent && dst(e) == child || dst(e) == parent && src(e) == child, edges(tci.g))
+            edge = isempty(edge) ? nothing : only(edge)
+            incomingedges = setdiff(adjacentedges(tci.g, child), Set([edge]))
+            InKeys = !isempty(incomingedges) ? edgeInIJkeys(tci.g, child, incomingedges) : SubTreeVertex[]
+            OutKeys = edge != nothing ? edgeInIJkeys(tci.g, child, edge) : SubTreeVertex[]
+            if d != 0
+                T = sitetensor(tci, child, edge, InKeys => OutKeys, f)
+                sitetensors[child] = T => vcat(
+                    incomingedges,
+                    [edge],
+                )
+            else
+                T = sitetensor(tci, child, edge, InKeys => OutKeys, f, core = true)
+                sitetensors[child] = T => incomingedges
             end
         end
+    end
+    return sitetensors
+end
 
-        candidates = outneighbors(g, child)
-        candidates = [cand for cand in candidates if cand != parent]
-        for cand in candidates
-            for (key, item) in regionbonds
-                if (src(item) == child && dst(item) == cand) ||
-                   (src(item) == cand && dst(item) == child)
-                    distances[key] = distances[parent_key] + 1
-                    break
+function sitetensor(
+    tci::SimpleTCI{ValueType},
+    site::Int,
+    InOutkeys,
+    T::AbstractArray{ValueType,N},
+) where {ValueType,N}
+    Inkeys, Outkeys = InOutkeys
+    return reshape(
+        T,
+        tci.localdims[site],
+        [length(tci.IJset[key]) for key in Inkeys]...,
+        [length(tci.IJset[key]) for key in Outkeys]...,
+    )
+end
+
+function sitetensor(
+    tci::SimpleTCI{ValueType},
+    site::Int,
+    edge,
+    InOutkeys,
+    f;
+    core = false,
+) where {ValueType}
+    Inkeys, Outkeys = InOutkeys
+    L = length(tci.localdims)
+    Pi1 = filltensor(ValueType, f, tci.localdims, tci.IJset, Inkeys, Outkeys, Val(1))
+    Pi1 = reshape(
+        Pi1,
+        prod(vcat([tci.localdims[site]], [length(tci.IJset[key]) for key in Inkeys])),
+        prod([length(tci.IJset[key]) for key in Outkeys]),
+    )
+    updatemaxsample!(tci, Pi1)
+
+    if core
+        T = sitetensor(tci, site, InOutkeys, Pi1)
+        return T
+    end
+
+    p, q = separatevertices(tci.g, edge)
+    if p == site
+        I1key = subtreevertices(tci.g, q => p)
+    elseif q == site
+        I1key = subtreevertices(tci.g, p => q)
+    end
+
+    P = reshape(
+        filltensor(ValueType, f, tci.localdims, tci.IJset, [I1key], Outkeys, Val(0)),
+        length(tci.IJset[I1key]),
+        prod([length(tci.IJset[key]) for key in Outkeys]),
+    )
+    length(tci.IJset[I1key]) == sum([length(tci.IJset[key]) for key in Outkeys]) || error("Pivot matrix at bond $(site) is not square!")
+    Tmat = transpose(transpose(P) \ transpose(Pi1))
+    T = reshape(
+            Tmat,
+            tci.localdims[site],
+            [length(tci.IJset[key]) for key in Inkeys]...,
+            [length(tci.IJset[key]) for key in Outkeys]...,
+        )
+    return T
+end
+
+
+function filltensor(
+    ::Type{ValueType},
+    f,
+    localdims::Vector{Int},
+    IJset::Dict{SubTreeVertex,Vector{MultiIndex}},
+    Inkeys::Vector{SubTreeVertex},
+    Outkeys::Vector{SubTreeVertex},
+    ::Val{M},
+)::Array{ValueType} where {ValueType,M}
+    N = length(localdims)
+    nin = sum([length(first(IJset[key])) for key in Inkeys])
+    nout = sum([length(first(IJset[key])) for key in Outkeys])
+    ncent = N - nin - nout
+    M == ncent || error("Invalid number of central indices")
+    Inlocaldims = [[localdims[i] for i in IJkey] for IJkey in Inkeys]
+    Outlocaldims = [[localdims[i] for i in IJkey] for IJkey in Outkeys]
+    Clocaldims = [
+        localdims[i] for i = 1:N if
+        all(i ∉ IJkey for IJkey in Inkeys) && all(i ∉ IJkey for IJkey in Outkeys)
+    ]
+    expected_size = (
+        Clocaldims...,
+        prod([length(IJset[key]) for key in Inkeys]),
+        prod([length(IJset[key]) for key in Outkeys]),
+    )
+    return reshape(
+        _call(ValueType, f, localdims, IJset, Inkeys, Outkeys, Val(ncent)),
+        expected_size...,
+    )
+end
+
+function _call(
+    ::Type{V},
+    f,
+    localdims::Vector{Int},
+    IJset::Dict{SubTreeVertex,Vector{MultiIndex}},
+    Inkeys::Vector{SubTreeVertex},
+    Outkeys::Vector{SubTreeVertex},
+    ::Val{M},
+)::Array{V} where {V,M}
+    N = length(localdims)
+    nin = prod([length(first(IJset[key])) for key in Inkeys])
+    nout = prod([length(first(IJset[key])) for key in Outkeys])
+    L = M + nin + nout
+
+    Ckey = [
+        i for i = 1:N if
+        all(i ∉ IJkey for IJkey in Inkeys) && all(i ∉ IJkey for IJkey in Outkeys)
+    ]
+    Clocaldims = [localdims[i] for i in Ckey]
+
+    indexset = MultiIndex(undef, L)
+    result = Array{V,3}(
+        undef,
+        prod(Clocaldims),
+        prod([length(IJset[key]) for key in Inkeys]),
+        prod([length(IJset[key]) for key in Outkeys]),
+    )
+
+    for (c, cindex) in enumerate(Iterators.product(ntuple(x -> 1:Clocaldims[x], M)...))
+        indexset = zeros(Int, N)
+        for (idx, key) in enumerate(Ckey)
+            indexset[key] = cindex[idx]
+        end
+        for (i, lindices) in
+            enumerate(Iterators.product((IJset[inkey] for inkey in Inkeys)...))
+            for (inkey, index) in zip(Inkeys, lindices)
+                for (idx, key) in enumerate(inkey)
+                    indexset[key] = index[idx]
                 end
             end
-        end
-        distances =
-            merge!(distances, distanceBFS(g, child => candidates, distances, regionbonds))
-    end
-    return distances
-end
 
-function bondcandidates(
-    g::NamedGraph,
-    parent_child::Pair{Int,Int},
-    regionbonds::Dict{Pair{SubTreeVertex,SubTreeVertex},NamedEdge},
-)::Vector{Pair{SubTreeVertex,SubTreeVertex}}
-    parent, child = first(parent_child), last(parent_child)
-    candidates = []
-    neighbors = outneighbors(g, child)
-    neighbors = [cand for cand in neighbors if cand != parent]
-    for cand in neighbors
-        for (key, item) in regionbonds
-            if (src(item) == child && dst(item) == cand) ||
-               (src(item) == cand && dst(item) == child)
-                push!(candidates, key)
-                break
+            for (j, rindices) in
+                enumerate(Iterators.product((IJset[outkey] for outkey in Outkeys)...))
+                for (outkey, index) in zip(Outkeys, rindices)
+                    for (idx, key) in enumerate(outkey)
+                        indexset[key] = index[idx]
+                    end
+                end
+                result[c, i, j] = f(indexset)
             end
         end
     end
-    return candidates
+    return result
 end
 
-function bondtokey(
+function edgeInIJkeys(
     g::NamedGraph,
-    vf::Int,
-    bonds,
-    regionbonds::Dict{Pair{SubTreeVertex,SubTreeVertex},NamedEdge},
+    v::Int,
+    combinededges
 )
+    if combinededges isa NamedEdge
+        combinededges = [combinededges]
+    end
     keys = SubTreeVertex[]
-    for bond in bonds
-        p, q = separatevertices(g, regionbonds[bond])
-        if p == vf
+    for edge in combinededges
+        p, q = separatevertices(g, edge)
+        if p == v
             push!(keys, subtreevertices(g, p => q))
-        elseif q == vf
+        elseif q == v
             push!(keys, subtreevertices(g, q => p))
         end
     end
     return keys
-end
-
-function inoutbondskeys(
-    g::NamedGraph,
-    regionbonds::Dict{Pair{SubTreeVertex, SubTreeVertex}, NamedEdge},
-    distances::Dict{Pair{SubTreeVertex, SubTreeVertex}, Int},
-    d::Int,
-    vf::Int,
-    adjacent_bonds::Vector{Pair{SubTreeVertex, SubTreeVertex}}
-)
-    Inbonds =
-        intersect(adjacent_bonds, filter(b -> distances[b] == d + 1, keys(regionbonds)))
-    Outbonds = intersect(adjacent_bonds, filter(b -> distances[b] == d, keys(regionbonds)))
-    Inkeys = bondtokey(g, vf, Inbonds, regionbonds)
-    Outkeys = bondtokey(g, vf, Outbonds, regionbonds)
-    return (Inbonds => Outbonds), (Inkeys => Outkeys)
 end
