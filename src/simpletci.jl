@@ -51,7 +51,7 @@ function SimpleTCI{ValueType}(
     return tci
 end
 
-"""
+@doc"""
 Add global pivots to index sets
 """
 function addglobalpivots!(
@@ -83,6 +83,36 @@ function addglobalpivots!(
     nothing
 end
 
+@doc"""
+    optimize!(tci::SimpleTCI{ValueType}, f; kwargs...)
+
+Optimize the tensor cross interpolation (TCI) by iteratively updating pivots.
+
+# Arguments
+- `tci`: The SimpleTCI object to optimize
+- `f`: The function to interpolate
+
+# Keywords
+- `tolerance::Union{Float64,Nothing} = nothing`: Error tolerance for convergence
+- `pivottolerance::Union{Float64,Nothing} = nothing`: Deprecated, use tolerance instead
+- `maxbonddim::Int = typemax(Int)`: Maximum bond dimension
+- `maxiter::Int = 20`: Maximum number of iterations
+- `sweepstrategy::Symbol = :backandforth`: Strategy for sweeping
+- `pivotsearch::Symbol = :full`: Strategy for pivot search
+- `verbosity::Int = 0`: Verbosity level
+- `loginterval::Int = 10`: Interval for logging
+- `normalizeerror::Bool = true`: Whether to normalize errors
+- `ncheckhistory::Int = 3`: Number of history steps to check
+- `maxnglobalpivot::Int = 5`: Maximum number of global pivots
+- `nsearchglobalpivot::Int = 5`: Number of global pivots to search
+- `tolmarginglobalsearch::Float64 = 10.0`: Tolerance margin for global search
+- `strictlynested::Bool = false`: Whether to enforce strict nesting
+- `checkbatchevaluatable::Bool = false`: Whether to check if function is batch evaluatable
+
+# Returns
+- `ranks`: Vector of ranks at each iteration
+- `errors`: Vector of normalized errors at each iteration
+"""
 function optimize!(
     tci::SimpleTCI{ValueType},
     f;
@@ -188,7 +218,7 @@ function optimize!(
     return ranks, errors ./ errornormalization
 end
 
-"""
+@doc"""
 Perform 2site sweeps on a SimpleTCI.
 !TODO: Implement for Tree structure
 
