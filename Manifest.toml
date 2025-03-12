@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.1"
+julia_version = "1.11.3"
 manifest_format = "2.0"
-project_hash = "1f7f5c1db39034ec09b7757d5ea1bce34b8ff4a3"
+project_hash = "ed3ee81988f09062e2a749e5fa7f702d5942c998"
 
 [[deps.AbstractTrees]]
 git-tree-sha1 = "2d9c9a55f9c93e8887ad391fbae72f8ef55e1177"
@@ -357,7 +357,7 @@ version = "1.11.0"
 
 [[deps.SimpleTensorNetworks]]
 deps = ["DataGraphs", "Graphs", "NamedGraphs"]
-path = "/Users/ryo/work/projects/TreeTCI/SimpleTensorNetworks.jl"
+git-tree-sha1 = "c425260a467bb77990a523e3b44d29d687bed4e5"
 uuid = "3075f829-f72e-4896-a859-7fe0a9cabb9b"
 version = "0.1.0"
 

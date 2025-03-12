@@ -19,6 +19,7 @@ Graphs = "1.12.0"
 JuliaFormatter = "1.0.62"
 NamedGraphs = "0.6.4"
 Revise = "3.7.2"
+SimpleTensorNetworks = "0.1.0"
 TensorCrossInterpolation = "0.9.13"
 UUIDs = "1.11.0"
 
