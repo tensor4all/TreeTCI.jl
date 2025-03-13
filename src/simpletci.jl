@@ -80,3 +80,17 @@ function addglobalpivots!(
 
     nothing
 end
+
+
+function pushunique!(collection, item)
+    if !(item in collection)
+        push!(collection, item)
+    end
+end
+
+function pushunique!(collection, items...)
+    for item in items
+        pushunique!(collection, item)
+    end
+end
+
