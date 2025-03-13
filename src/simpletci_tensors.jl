@@ -4,7 +4,8 @@ function fillsitetensors(
     center_vertex::Int = 0,
 ) where {ValueType}
 
-    sitetensors = Vector{Pair{Array{ValueType},Vector{NamedEdge}}}(undef, length(vertices(tci.g)))
+    sitetensors =
+        Vector{Pair{Array{ValueType},Vector{NamedEdge}}}(undef, length(vertices(tci.g)))
 
     if center_vertex ∉ vertices(tci.g)
         center_vertex = first(vertices(tci.g))
@@ -18,17 +19,21 @@ function fillsitetensors(
         for child in children
             # adjacent_edges = adjacentedges(tci.g, child)
             parent = state.parents[child]
-            edge = filter(e -> src(e) == parent && dst(e) == child || dst(e) == parent && src(e) == child, edges(tci.g))
+            edge = filter(
+                e ->
+                    src(e) == parent && dst(e) == child ||
+                        dst(e) == parent && src(e) == child,
+                edges(tci.g),
+            )
             edge = isempty(edge) ? nothing : only(edge)
             incomingedges = setdiff(adjacentedges(tci.g, child), Set([edge]))
-            InKeys = !isempty(incomingedges) ? edgeInIJkeys(tci.g, child, incomingedges) : SubTreeVertex[]
+            InKeys =
+                !isempty(incomingedges) ? edgeInIJkeys(tci.g, child, incomingedges) :
+                SubTreeVertex[]
             OutKeys = edge != nothing ? edgeInIJkeys(tci.g, child, edge) : SubTreeVertex[]
             if d != 0
                 T = sitetensor(tci, child, edge, InKeys => OutKeys, f)
-                sitetensors[child] = T => vcat(
-                    incomingedges,
-                    [edge],
-                )
+                sitetensors[child] = T => vcat(incomingedges, [edge])
             else
                 T = sitetensor(tci, child, edge, InKeys => OutKeys, f, core = true)
                 sitetensors[child] = T => incomingedges
@@ -91,11 +96,11 @@ function sitetensor(
     length(tci.IJset[I1key]) == sum([length(tci.IJset[key]) for key in Outkeys]) || error("Pivot matrix at bond $(site) is not square!")
     Tmat = transpose(transpose(P) \ transpose(Pi1))
     T = reshape(
-            Tmat,
-            tci.localdims[site],
-            [length(tci.IJset[key]) for key in Inkeys]...,
-            [length(tci.IJset[key]) for key in Outkeys]...,
-        )
+        Tmat,
+        tci.localdims[site],
+        [length(tci.IJset[key]) for key in Inkeys]...,
+        [length(tci.IJset[key]) for key in Outkeys]...,
+    )
     return T
 end
 
@@ -186,11 +191,7 @@ function _call(
     return result
 end
 
-function edgeInIJkeys(
-    g::NamedGraph,
-    v::Int,
-    combinededges
-)
+function edgeInIJkeys(g::NamedGraph, v::Int, combinededges)
     if combinededges isa NamedEdge
         combinededges = [combinededges]
     end

@@ -1,18 +1,48 @@
 """
 Abstract type for pivot candidate generation strategies
 """
-abstract type Sweep2sitePathProper end
+abstract type AbstractSweep2sitePathProper end
 
 """
-Default strategy that uses kronecker product and union with extra indices
+Default strategy
 """
-struct DefaultSweep2sitePathProper <: Sweep2sitePathProper end
+struct DefaultSweep2sitePathProper <: AbstractSweep2sitePathProper end
 
 """
-Default strategy that runs through within all indices of site tensor according to the bond and connect them with IJSet from neighbors
+Random strategy
+"""
+struct RandomSweep2sitePathProper <: AbstractSweep2sitePathProper end
+
+"""
+LocalAdjacent strategy
+"""
+struct LocalAdjacentSweep2sitePathProper <: AbstractSweep2sitePathProper end
+
+"""
+Default strategy that return the sequence path defined by the edges(g)
 """
 function generate_sweep2site_path(
     ::DefaultSweep2sitePathProper,
+    tci::SimpleTCI{ValueType},
+) where {ValueType}
+    return collect(edges(tci.g))
+end
+
+"""
+Random strategy that returns a random sequence of edges
+"""
+function generate_sweep2site_path(
+    ::RandomSweep2sitePathProper,
+    tci::SimpleTCI{ValueType},
+) where {ValueType}
+    return shuffle(collect(edges(tci.g)))
+end
+
+"""
+LocalAdjacent strategy that runs through within all indices of site tensor according to the bond and connect them with IJSet from neighbors
+"""
+function generate_sweep2site_path(
+    ::LocalAdjacentSweep2sitePathProper,
     tci::SimpleTCI{ValueType};
     origin_edge = undef,
 ) where {ValueType}
@@ -42,10 +72,7 @@ function generate_sweep2site_path(
     while true
 
         candidates = candidateedges(tci.g, center_edge)
-        candidates = filter(
-            e -> flags[e] == 0,
-            candidates
-        )
+        candidates = filter(e -> flags[e] == 0, candidates)
 
         # If candidates is empty, exit while loop
         if isempty(candidates)

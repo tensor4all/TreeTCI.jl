@@ -12,10 +12,7 @@ makedocs(;
         edit_link = "main",
         assets = String[],
     ),
-    pages = [
-        "Home" => "index.md",
-        "API Reference" => "api.md"
-    ],
+    pages = ["Home" => "index.md", "API Reference" => "api.md"],
 )
 
 deploydocs(; repo = "github.com/tensor4all/TreeTCI.jl.git", devbranch = "main")
