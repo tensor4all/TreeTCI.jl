@@ -15,7 +15,7 @@ TensorCrossInterpolation = "b261b2ec-6378-4871-b32e-9173bb050604"
 DataGraphs = "0.2.5"
 Graphs = "1.12.0"
 NamedGraphs = "0.6.4"
-Random = "1.11.0"
+Random = "1.11"
 SimpleTensorNetworks = "0.1.0"
 TensorCrossInterpolation = "0.9.13"
 
