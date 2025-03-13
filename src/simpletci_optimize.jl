@@ -9,20 +9,13 @@
 
  # Keywords
  - `tolerance::Union{Float64,Nothing} = nothing`: Error tolerance for convergence
- - `pivottolerance::Union{Float64,Nothing} = nothing`: Deprecated, use tolerance instead
  - `maxbonddim::Int = typemax(Int)`: Maximum bond dimension
  - `maxiter::Int = 20`: Maximum number of iterations
  - `sweepstrategy::AbstractSweep2sitePathProper = DefaultSweep2sitePathProper()`: Strategy for sweeping
- - `pivotsearch::Symbol = :full`: Strategy for pivot search
  - `verbosity::Int = 0`: Verbosity level
  - `loginterval::Int = 10`: Interval for logging
  - `normalizeerror::Bool = true`: Whether to normalize errors
  - `ncheckhistory::Int = 3`: Number of history steps to check
- - `maxnglobalpivot::Int = 5`: Maximum number of global pivots
- - `nsearchglobalpivot::Int = 5`: Number of global pivots to search
- - `tolmarginglobalsearch::Float64 = 10.0`: Tolerance margin for global search
- - `strictlynested::Bool = false`: Whether to enforce strict nesting
- - `checkbatchevaluatable::Bool = false`: Whether to check if function is batch evaluatable
 
  # Returns
  - `ranks`: Vector of ranks at each iteration
@@ -31,56 +24,21 @@
 function optimize!(
     tci::SimpleTCI{ValueType},
     f;
-    tolerance::Union{Float64,Nothing} = nothing,
-    pivottolerance::Union{Float64,Nothing} = nothing,
+    tolerance::Float64 = 1e-8,
     maxbonddim::Int = typemax(Int),
     maxiter::Int = 20,
     sweepstrategy::AbstractSweep2sitePathProper = DefaultSweep2sitePathProper(),
-    pivotsearch::Symbol = :full,
     verbosity::Int = 0,
     loginterval::Int = 10,
     normalizeerror::Bool = true,
     ncheckhistory::Int = 3,
-    maxnglobalpivot::Int = 5,
-    nsearchglobalpivot::Int = 5,
-    tolmarginglobalsearch::Float64 = 10.0,
-    strictlynested::Bool = false,
-    checkbatchevaluatable::Bool = false,
 ) where {ValueType}
     errors = Float64[]
     ranks = Int[]
-    nglobalpivots = Int[]
-    local tol::Float64
-
-    if checkbatchevaluatable && !(f isa BatchEvaluator)
-        error("Function `f` is not batch evaluatable")
-    end
-
-    if nsearchglobalpivot > 0 && nsearchglobalpivot < maxnglobalpivot
-        error("nsearchglobalpivot < maxnglobalpivot!")
-    end
-
-    # Deprecate the pivottolerance option
-    if !isnothing(pivottolerance)
-        if !isnothing(tolerance) && (tolerance != pivottolerance)
-            throw(
-                ArgumentError(
-                    "Got different values for pivottolerance and tolerance in optimize!(TCI2). For TCI2, both of these options have the same meaning. Please assign only `tolerance`.",
-                ),
-            )
-        else
-            @warn "The option `pivottolerance` of `optimize!(tci::TensorCI2, f)` is deprecated. Please update your code to use `tolerance`, as `pivottolerance` will be removed in the future."
-            tol = pivottolerance
-        end
-    elseif !isnothing(tolerance)
-        tol = tolerance
-    else # pivottolerance == tolerance == nothing, therefore set tol to default value
-        tol = 1e-8
-    end
 
     tstart = time_ns()
 
-    if maxbonddim >= typemax(Int) && tol <= 0
+    if maxbonddim >= typemax(Int) && tolerance <= 0
         throw(
             ArgumentError(
                 "Specify either tolerance > 0 or some maxbonddim; otherwise, the convergence criterion is not reachable!",
@@ -91,7 +49,7 @@ function optimize!(
     globalpivots = MultiIndex[]
     for iter = 1:maxiter
         errornormalization = normalizeerror ? tci.maxsamplevalue : 1.0
-        abstol = tol * errornormalization
+        abstol = tolerance * errornormalization
 
         if verbosity > 1
             println("  Walltime $(1e-9*(time_ns() - tstart)) sec: starting 2site sweep")
@@ -102,10 +60,8 @@ function optimize!(
             tci,
             f,
             2;
-            iter1 = 1,
             abstol = abstol,
             maxbonddim = maxbonddim,
-            pivotsearch = pivotsearch,
             verbosity = verbosity,
             sweepstrategy = sweepstrategy,
         )
@@ -142,17 +98,15 @@ function sweep2site!(
     tci::SimpleTCI{ValueType},
     f,
     niter::Int;
-    iter1::Int = 1,
     abstol::Float64 = 1e-8,
     maxbonddim::Int = typemax(Int),
     sweepstrategy::AbstractSweep2sitePathProper = DefaultSweep2sitePathProper(),
-    pivotsearch::Symbol = :full,
     verbosity::Int = 0,
 ) where {ValueType}
 
     edge_path = generate_sweep2site_path(sweepstrategy, tci)
 
-    for iter = iter1:iter1+niter-1
+    for _ in 1:niter
         extraIJset = Dict(key => MultiIndex[] for key in keys(tci.IJset))
         if length(tci.IJset_history) > 0
             extraIJset = tci.IJset_history[end]
