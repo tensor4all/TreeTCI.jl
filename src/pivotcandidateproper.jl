@@ -1,12 +1,12 @@
 """
 Abstract type for pivot candidate generation strategies
 """
-abstract type PivotCandidateProper end
+abstract type AbstractPivotCandidateProper end
 
 """
 Default strategy that uses kronecker product and union with extra indices
 """
-struct DefaultPivotCandidateProper <: PivotCandidateProper end
+struct DefaultPivotCandidateProper <: AbstractPivotCandidateProper end
 
 """
 Default strategy that runs through within all indices of site tensor according to the bond and connect them with IJSet from neighbors

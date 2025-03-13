@@ -1,22 +1,22 @@
 """
 Abstract type for pivot candidate generation strategies
 """
-abstract type Sweep2sitePathProper end
+abstract type AbstractSweep2sitePathProper end
 
 """
 Default strategy
 """
-struct DefaultSweep2sitePathProper <: Sweep2sitePathProper end
+struct DefaultSweep2sitePathProper <: AbstractSweep2sitePathProper end
 
 """
 Random strategy
 """
-struct RandomSweep2sitePathProper <: Sweep2sitePathProper end
+struct RandomSweep2sitePathProper <: AbstractSweep2sitePathProper end
 
 """
 LocalAdjacent strategy
 """
-struct LocalAdjacentSweep2sitePathProper <: Sweep2sitePathProper end
+struct LocalAdjacentSweep2sitePathProper <: AbstractSweep2sitePathProper end
 
 """
 Default strategy that return the sequence path defined by the edges(g)
