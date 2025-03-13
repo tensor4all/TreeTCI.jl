@@ -11,7 +11,7 @@
  - `tolerance::Union{Float64,Nothing} = nothing`: Error tolerance for convergence
  - `maxbonddim::Int = typemax(Int)`: Maximum bond dimension
  - `maxiter::Int = 20`: Maximum number of iterations
- - `sweepstrategy::AbstractSweep2sitePathProper = DefaultSweep2sitePathProper()`: Strategy for sweeping
+ - `sweepstrategy::AbstractSweep2sitePathProposer = DefaultSweep2sitePathProposer()`: Strategy for sweeping
  - `verbosity::Int = 0`: Verbosity level
  - `loginterval::Int = 10`: Interval for logging
  - `normalizeerror::Bool = true`: Whether to normalize errors
@@ -27,7 +27,7 @@ function optimize!(
     tolerance::Float64 = 1e-8,
     maxbonddim::Int = typemax(Int),
     maxiter::Int = 20,
-    sweepstrategy::AbstractSweep2sitePathProper = DefaultSweep2sitePathProper(),
+    sweepstrategy::AbstractSweep2sitePathProposer = DefaultSweep2sitePathProposer(),
     verbosity::Int = 0,
     loginterval::Int = 10,
     normalizeerror::Bool = true,
@@ -100,13 +100,13 @@ function sweep2site!(
     niter::Int;
     abstol::Float64 = 1e-8,
     maxbonddim::Int = typemax(Int),
-    sweepstrategy::AbstractSweep2sitePathProper = DefaultSweep2sitePathProper(),
+    sweepstrategy::AbstractSweep2sitePathProposer = DefaultSweep2sitePathProposer(),
     verbosity::Int = 0,
 ) where {ValueType}
 
     edge_path = generate_sweep2site_path(sweepstrategy, tci)
 
-    for _ in 1:niter
+    for _ = 1:niter
         extraIJset = Dict(key => MultiIndex[] for key in keys(tci.IJset))
         if length(tci.IJset_history) > 0
             extraIJset = tci.IJset_history[end]
@@ -159,7 +159,7 @@ function updatepivots!(
     N = length(tci.localdims)
 
     (IJkey, combinedIJset) =
-        generate_pivot_candidates(DefaultPivotCandidateProper(), tci, edge, extraIJset)
+        generate_pivot_candidates(DefaultPivotCandidateProposer(), tci, edge, extraIJset)
     Ikey, Jkey = first(IJkey), last(IJkey)
 
     t1 = time_ns()

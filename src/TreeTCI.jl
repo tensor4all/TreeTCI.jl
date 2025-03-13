@@ -18,8 +18,8 @@ import SimpleTensorNetworks:
 import Random: shuffle
 include("treegraph_utils.jl")
 include("simpletci.jl")
-include("pivotcandidateproper.jl")
-include("sweep2sitepathproper.jl")
+include("pivotcandidateproposer.jl")
+include("sweep2sitepathproposer.jl")
 include("simpletci_optimize.jl")
 include("simpletci_tensors.jl")
 include("treetensornetwork.jl")

@@ -64,3 +64,8 @@ end
 function (ttn::TreeTensorNetwork{V})(indexset) where {V}
     return evaluate(ttn, indexset)
 end
+
+# Add length method for TreeTensorNetwork
+function Base.length(ttn::TreeTensorNetwork)
+    return length(vertices(ttn.tensornetwork.data_graph))
+end
