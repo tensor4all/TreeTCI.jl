@@ -12,6 +12,6 @@ using Test
     # end
 
     @testset verbose = true "Actual tests" begin
-        include("simpletci_utils_test.jl")
+        include("treegraph_utils_test.jl")
     end
 end

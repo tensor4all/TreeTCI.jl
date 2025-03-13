@@ -15,7 +15,8 @@ import NamedGraphs:
 import TensorCrossInterpolation as TCI
 import SimpleTensorNetworks:
     TensorNetwork, IndexedArray, Index, complete_contraction, getindex, contract
-include("tree_utils.jl")
+import Random: shuffle
+include("treegraph_utils.jl")
 include("simpletci.jl")
 include("simpletci_utils.jl")
 include("pivotcandidateproper.jl")

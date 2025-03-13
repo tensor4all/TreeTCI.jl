@@ -4,9 +4,19 @@ Abstract type for pivot candidate generation strategies
 abstract type Sweep2sitePathProper end
 
 """
-Default strategy that uses kronecker product and union with extra indices
+Default strategy
 """
 struct DefaultSweep2sitePathProper <: Sweep2sitePathProper end
+
+"""
+Random strategy
+"""
+struct RandomSweep2sitePathProper <: Sweep2sitePathProper end
+
+"""
+LocalAdjacent strategy
+"""
+struct LocalAdjacentSweep2sitePathProper <: Sweep2sitePathProper end
 
 """
 Default strategy that return the sequence path defined by the edges(g)
@@ -16,6 +26,16 @@ function generate_sweep2site_path(
     tci::SimpleTCI{ValueType},
 ) where {ValueType}
     return collect(edges(tci.g))
+end
+
+"""
+Random strategy that returns a random sequence of edges
+"""
+function generate_sweep2site_path(
+    ::RandomSweep2sitePathProper,
+    tci::SimpleTCI{ValueType},
+) where {ValueType}
+    return shuffle(collect(edges(tci.g)))
 end
 
 """

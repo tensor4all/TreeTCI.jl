@@ -61,22 +61,21 @@ end
 function distanceedges(g::NamedGraph, edge::NamedEdge)::Dict{NamedEdge,Int}
     p, q = separatevertices(g, edge)
     distances = Dict{NamedEdge,Int}()
-    distances[edge] = 0
-    distances = distanceBFSedge(g, edge, distances)
-    return distances
-end
 
-function distanceBFSedge(
-    g::NamedGraph,
-    edge::NamedEdge,
-    distances::Dict{NamedEdge,Int},
-)::Dict{NamedEdge,Int}
-
-    candidates = candidateedges(g, edge)
-    candidates = filter(cand -> cand ∉ keys(distances), candidates)
-    for cand in candidates
-        distances[cand] = distances[edge] + 1
-        distances = merge!(distances, distanceBFSedge(g, cand, distances))
+    function compute_distances(root, opposite, state)
+        for subvertex in filter(v -> v != root, subtreevertices(g, opposite => root))
+            parent = state.parents[subvertex]
+            e = NamedEdge(parent, subvertex)
+            distances[e ∈ edges(g) ? e : reverse(e)] = state.dists[subvertex]
+        end
     end
+
+    state_p = namedgraph_dijkstra_shortest_paths(g, p)
+    compute_distances(p, q, state_p)
+
+    state_q = namedgraph_dijkstra_shortest_paths(g, q)
+    compute_distances(q, p, state_q)
+
+    distances[edge] = 0
     return distances
 end

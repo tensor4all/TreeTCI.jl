@@ -237,8 +237,13 @@ function sweep2site!(
 
     if sweepstrategy == :default
         edge_path = generate_sweep2site_path(DefaultSweep2sitePathProper(), tci)
+
     elseif sweepstrategy == :localadjacent
         edge_path = generate_sweep2site_path(LocalAdjacentSweep2sitePathProper(), tci)
+
+    elseif sweepstrategy == :random
+        edge_path = generate_sweep2site_path(RandomSweep2sitePathProper(), tci)
+
     else
         error("Invalid sweep strategy: $sweepstrategy")
     end
