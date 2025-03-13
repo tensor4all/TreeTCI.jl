@@ -51,9 +51,9 @@ function SimpleTCI{ValueType}(
     return tci
 end
 
-@doc"""
-Add global pivots to index sets
-"""
+@doc """
+ Add global pivots to index sets
+ """
 function addglobalpivots!(
     tci::SimpleTCI{ValueType},
     pivots::Vector{MultiIndex},
@@ -83,36 +83,36 @@ function addglobalpivots!(
     nothing
 end
 
-@doc"""
-    optimize!(tci::SimpleTCI{ValueType}, f; kwargs...)
+@doc """
+     optimize!(tci::SimpleTCI{ValueType}, f; kwargs...)
 
-Optimize the tensor cross interpolation (TCI) by iteratively updating pivots.
+ Optimize the tensor cross interpolation (TCI) by iteratively updating pivots.
 
-# Arguments
-- `tci`: The SimpleTCI object to optimize
-- `f`: The function to interpolate
+ # Arguments
+ - `tci`: The SimpleTCI object to optimize
+ - `f`: The function to interpolate
 
-# Keywords
-- `tolerance::Union{Float64,Nothing} = nothing`: Error tolerance for convergence
-- `pivottolerance::Union{Float64,Nothing} = nothing`: Deprecated, use tolerance instead
-- `maxbonddim::Int = typemax(Int)`: Maximum bond dimension
-- `maxiter::Int = 20`: Maximum number of iterations
-- `sweepstrategy::Symbol = :backandforth`: Strategy for sweeping
-- `pivotsearch::Symbol = :full`: Strategy for pivot search
-- `verbosity::Int = 0`: Verbosity level
-- `loginterval::Int = 10`: Interval for logging
-- `normalizeerror::Bool = true`: Whether to normalize errors
-- `ncheckhistory::Int = 3`: Number of history steps to check
-- `maxnglobalpivot::Int = 5`: Maximum number of global pivots
-- `nsearchglobalpivot::Int = 5`: Number of global pivots to search
-- `tolmarginglobalsearch::Float64 = 10.0`: Tolerance margin for global search
-- `strictlynested::Bool = false`: Whether to enforce strict nesting
-- `checkbatchevaluatable::Bool = false`: Whether to check if function is batch evaluatable
+ # Keywords
+ - `tolerance::Union{Float64,Nothing} = nothing`: Error tolerance for convergence
+ - `pivottolerance::Union{Float64,Nothing} = nothing`: Deprecated, use tolerance instead
+ - `maxbonddim::Int = typemax(Int)`: Maximum bond dimension
+ - `maxiter::Int = 20`: Maximum number of iterations
+ - `sweepstrategy::Symbol = :backandforth`: Strategy for sweeping
+ - `pivotsearch::Symbol = :full`: Strategy for pivot search
+ - `verbosity::Int = 0`: Verbosity level
+ - `loginterval::Int = 10`: Interval for logging
+ - `normalizeerror::Bool = true`: Whether to normalize errors
+ - `ncheckhistory::Int = 3`: Number of history steps to check
+ - `maxnglobalpivot::Int = 5`: Maximum number of global pivots
+ - `nsearchglobalpivot::Int = 5`: Number of global pivots to search
+ - `tolmarginglobalsearch::Float64 = 10.0`: Tolerance margin for global search
+ - `strictlynested::Bool = false`: Whether to enforce strict nesting
+ - `checkbatchevaluatable::Bool = false`: Whether to check if function is batch evaluatable
 
-# Returns
-- `ranks`: Vector of ranks at each iteration
-- `errors`: Vector of normalized errors at each iteration
-"""
+ # Returns
+ - `ranks`: Vector of ranks at each iteration
+ - `errors`: Vector of normalized errors at each iteration
+ """
 function optimize!(
     tci::SimpleTCI{ValueType},
     f;
@@ -120,7 +120,7 @@ function optimize!(
     pivottolerance::Union{Float64,Nothing} = nothing,
     maxbonddim::Int = typemax(Int),
     maxiter::Int = 20,
-    sweepstrategy::Symbol = :backandforth, # TODO: Implement for Tree structure
+    sweepstrategy::Symbol = :default,
     pivotsearch::Symbol = :full,
     verbosity::Int = 0,
     loginterval::Int = 10,
@@ -218,11 +218,11 @@ function optimize!(
     return ranks, errors ./ errornormalization
 end
 
-@doc"""
-Perform 2site sweeps on a SimpleTCI.
-!TODO: Implement for Tree structure
+@doc """
+ Perform 2site sweeps on a SimpleTCI.
+ !TODO: Implement for Tree structure
 
-"""
+ """
 function sweep2site!(
     tci::SimpleTCI{ValueType},
     f,
@@ -230,12 +230,18 @@ function sweep2site!(
     iter1::Int = 1,
     abstol::Float64 = 1e-8,
     maxbonddim::Int = typemax(Int),
-    sweepstrategy::Symbol = :backandforth,
+    sweepstrategy::Symbol = :default,
     pivotsearch::Symbol = :full,
     verbosity::Int = 0,
 ) where {ValueType}
 
-    edge_path = generate_sweep2site_path(DefaultSweep2sitePathProper(), tci)
+    if sweepstrategy == :default
+        edge_path = generate_sweep2site_path(DefaultSweep2sitePathProper(), tci)
+    elseif sweepstrategy == :localadjacent
+        edge_path = generate_sweep2site_path(LocalAdjacentSweep2sitePathProper(), tci)
+    else
+        error("Invalid sweep strategy: $sweepstrategy")
+    end
 
 
     for iter = iter1:iter1+niter-1
@@ -285,30 +291,18 @@ function updatepivots!(
     extraIJset::Dict{SubTreeVertex,Vector{MultiIndex}} = Dict{
         SubTreeVertex,
         Vector{MultiIndex},
-        }(),
-    ) where {F,ValueType}
+    }(),
+) where {F,ValueType}
 
-        N = length(tci.localdims)
+    N = length(tci.localdims)
 
-        (IJkey, combinedIJset) = generate_pivot_candidates(
-            DefaultPivotCandidateProper(),
-            tci,
-            edge,
-            extraIJset,
-        )
-        Ikey, Jkey = first(IJkey), last(IJkey)
+    (IJkey, combinedIJset) =
+        generate_pivot_candidates(DefaultPivotCandidateProper(), tci, edge, extraIJset)
+    Ikey, Jkey = first(IJkey), last(IJkey)
 
-        t1 = time_ns()
-        Pi = reshape(
-            filltensor(
-                ValueType,
-                f,
-                tci.localdims,
-                combinedIJset,
-                [Ikey],
-                [Jkey],
-                Val(0),
-            ),
+    t1 = time_ns()
+    Pi = reshape(
+        filltensor(ValueType, f, tci.localdims, combinedIJset, [Ikey], [Jkey], Val(0)),
         length(combinedIJset[Ikey]),
         length(combinedIJset[Jkey]),
     )
@@ -324,18 +318,19 @@ function updatepivots!(
 
     t3 = time_ns()
     if verbosity > 2
-        x, y = length(combinedIJset[Ikey]), length(combinedIJset[Jkey]),
+        x, y = length(combinedIJset[Ikey]),
+        length(combinedIJset[Jkey]),
         println(
             "    Computing Pi ($x x $y) at bond $b: $(1e-9*(t2-t1)) sec, LU: $(1e-9*(t3-t2)) sec",
-            )
-        end
-
-        tci.IJset[Ikey] = combinedIJset[Ikey][TCI.rowindices(luci)]
-        tci.IJset[Jkey] = combinedIJset[Jkey][TCI.colindices(luci)]
-
-        updateerrors!(tci, edge, TCI.pivoterrors(luci))
-        nothing
+        )
     end
+
+    tci.IJset[Ikey] = combinedIJset[Ikey][TCI.rowindices(luci)]
+    tci.IJset[Jkey] = combinedIJset[Jkey][TCI.colindices(luci)]
+
+    updateerrors!(tci, edge, TCI.pivoterrors(luci))
+    nothing
+end
 
 
 function updatemaxsample!(tci::SimpleTCI{V}, samples::Array{V}) where {V}
@@ -352,11 +347,7 @@ function updateerrors!(
     nothing
 end
 
-function updateedgeerror!(
-    tci::SimpleTCI{T},
-    edge::NamedEdge,
-    error::Float64,
-) where {T}
+function updateedgeerror!(tci::SimpleTCI{T}, edge::NamedEdge, error::Float64) where {T}
     tci.bonderrors[edge] = error
     nothing
 end

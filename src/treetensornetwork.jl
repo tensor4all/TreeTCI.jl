@@ -2,7 +2,8 @@ mutable struct TreeTensorNetwork{ValueType}
     tensornetwork::TensorNetwork
 
     function TreeTensorNetwork(
-        g::NamedGraph, sitetensors::Vector{Pair{Array{ValueType},Vector{NamedEdge}}},
+        g::NamedGraph,
+        sitetensors::Vector{Pair{Array{ValueType},Vector{NamedEdge}}},
     ) where {ValueType}
         !Graphs.is_cyclic(g) ||
             error("TreeTensorNetwork is not supported for loopy tensor network.")
@@ -11,8 +12,9 @@ mutable struct TreeTensorNetwork{ValueType}
             indexs = vcat(
                 Index(size(T)[1], "s$i"),
                 [
-                    Index(size(T)[j+1], "$(src(edges[j]))=>$(dst(edges[j]))") for j = 1:length(edges)
-                ]
+                    Index(size(T)[j+1], "$(src(edges[j]))=>$(dst(edges[j]))") for
+                    j = 1:length(edges)
+                ],
             )
             t = IndexedArray(T, indexs)
             push!(ttntensors, t)
@@ -25,7 +27,7 @@ end
 function crossinterpolate(
     ::Type{ValueType},
     f,
-    localdims::Union{Vector{Int}, NTuple{N,Int}},
+    localdims::Union{Vector{Int},NTuple{N,Int}},
     g::NamedGraph,
     initialpivots::Vector{MultiIndex} = [ones(Int, length(localdims))];
     kwargs...,
@@ -39,7 +41,7 @@ end
 function evaluate(
     ttn::TreeTensorNetwork{ValueType},
     indexset::Union{AbstractVector{Int},NTuple{N,Int}},
-    ) where {N, ValueType}
+) where {N,ValueType}
     tn = deepcopy(ttn.tensornetwork)
     if length(indexset) != length(vertices(tn.data_graph))
         throw(
@@ -51,8 +53,8 @@ function evaluate(
     for i = 1:length(vertices(tn.data_graph))
         t = tn[i]
         site = IndexedArray(
-            [j == indexset[i] ? 1.0 : 0.0 for j in 1:t.indices[1].dim],
-            [t.indices[1]]
+            [j == indexset[i] ? 1.0 : 0.0 for j = 1:t.indices[1].dim],
+            [t.indices[1]],
         )
         tn[i] = contract(t, site)
     end
@@ -62,4 +64,3 @@ end
 function (ttn::TreeTensorNetwork{V})(indexset) where {V}
     return evaluate(ttn, indexset)
 end
-

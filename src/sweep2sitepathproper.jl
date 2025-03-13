@@ -9,10 +9,20 @@ Default strategy that uses kronecker product and union with extra indices
 struct DefaultSweep2sitePathProper <: Sweep2sitePathProper end
 
 """
-Default strategy that runs through within all indices of site tensor according to the bond and connect them with IJSet from neighbors
+Default strategy that return the sequence path defined by the edges(g)
 """
 function generate_sweep2site_path(
     ::DefaultSweep2sitePathProper,
+    tci::SimpleTCI{ValueType},
+) where {ValueType}
+    return collect(edges(tci.g))
+end
+
+"""
+LocalAdjacent strategy that runs through within all indices of site tensor according to the bond and connect them with IJSet from neighbors
+"""
+function generate_sweep2site_path(
+    ::LocalAdjacentSweep2sitePathProper,
     tci::SimpleTCI{ValueType};
     origin_edge = undef,
 ) where {ValueType}
@@ -42,10 +52,7 @@ function generate_sweep2site_path(
     while true
 
         candidates = candidateedges(tci.g, center_edge)
-        candidates = filter(
-            e -> flags[e] == 0,
-            candidates
-        )
+        candidates = filter(e -> flags[e] == 0, candidates)
 
         # If candidates is empty, exit while loop
         if isempty(candidates)

@@ -22,10 +22,10 @@ function generate_pivot_candidates(
     Ikey, subIkey = subtreevertices(tci.g, vq => vp), vp
     Jkey, subJkey = subtreevertices(tci.g, vp => vq), vq
 
-    adjacent_edges_vp = adjacentedges(tci.g, vp; combinededges=edge)
+    adjacent_edges_vp = adjacentedges(tci.g, vp; combinededges = edge)
     InIkeys = edgeInIJkeys(tci.g, vp, adjacent_edges_vp)
 
-    adjacent_edges_vq = adjacentedges(tci.g, vq; combinededges=edge)
+    adjacent_edges_vq = adjacentedges(tci.g, vq; combinededges = edge)
     InJkeys = edgeInIJkeys(tci.g, vq, adjacent_edges_vq)
 
     # Generate base index sets for both sides

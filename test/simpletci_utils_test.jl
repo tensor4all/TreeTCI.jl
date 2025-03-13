@@ -30,13 +30,11 @@ import NamedGraphs: NamedGraph, NamedEdge, add_edge!, edges, has_edge
         @test last(subregions) == [4, 5, 6, 7]
 
 
-        @test Set(TreeTCI.adjacentedges(g, 4)) == Set(
-            [NamedEdge(2 => 4), NamedEdge(4 => 5)]
-        )
+        @test Set(TreeTCI.adjacentedges(g, 4)) ==
+              Set([NamedEdge(2 => 4), NamedEdge(4 => 5)])
 
-        @test Set(TreeTCI.candidateedges(g, NamedEdge(2 => 4))) == Set(
-            [NamedEdge(1 => 2), NamedEdge(2 => 3), NamedEdge(4 => 5)]
-        )
+        @test Set(TreeTCI.candidateedges(g, NamedEdge(2 => 4))) ==
+              Set([NamedEdge(1 => 2), NamedEdge(2 => 3), NamedEdge(4 => 5)])
 
         @test TreeTCI.distanceedges(g, NamedEdge(2 => 4)) == Dict(
             NamedEdge(2 => 4) => 0,

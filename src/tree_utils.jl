@@ -35,8 +35,8 @@ end
 function adjacentedges(
     g::NamedGraph,
     vertex::Int;
-    combinededges::Union{NamedEdge, Vector{NamedEdge}} = Vector{NamedEdge}()
-) ::Vector{NamedEdge}
+    combinededges::Union{NamedEdge,Vector{NamedEdge}} = Vector{NamedEdge}(),
+)::Vector{NamedEdge}
     if combinededges isa NamedEdge
         combinededges = [combinededges]
     end
@@ -50,19 +50,15 @@ function adjacentedges(
     return adjedges
 end
 
-function candidateedges(
-    g::NamedGraph,
-    edge::NamedEdge,
-)::Vector{NamedEdge}
+function candidateedges(g::NamedGraph, edge::NamedEdge)::Vector{NamedEdge}
     p, q = separatevertices(g, edge)
-    candidates = adjacentedges(g, p; combinededges=edge) ∪ adjacentedges(g, q; combinededges=edge)
+    candidates =
+        adjacentedges(g, p; combinededges = edge) ∪
+        adjacentedges(g, q; combinededges = edge)
     return candidates
 end
 
-function distanceedges(
-    g::NamedGraph,
-    edge::NamedEdge,
-)::Dict{NamedEdge,Int}
+function distanceedges(g::NamedGraph, edge::NamedEdge)::Dict{NamedEdge,Int}
     p, q = separatevertices(g, edge)
     distances = Dict{NamedEdge,Int}()
     distances[edge] = 0
@@ -80,8 +76,7 @@ function distanceBFSedge(
     candidates = filter(cand -> cand ∉ keys(distances), candidates)
     for cand in candidates
         distances[cand] = distances[edge] + 1
-        distances =
-            merge!(distances, distanceBFSedge(g, cand, distances))
+        distances = merge!(distances, distanceBFSedge(g, cand, distances))
     end
     return distances
 end
