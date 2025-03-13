@@ -22,9 +22,6 @@ mutable struct TreeTensorNetwork{ValueType}
     end
 end
 
-"""
-See also: [`optimize!`](@ref), [`optfirstpivot`](@ref), [`CachedFunction`](@ref), [`crossinterpolate1`](@ref)
-"""
 function crossinterpolate(
     ::Type{ValueType},
     f,
