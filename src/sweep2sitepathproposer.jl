@@ -1,28 +1,28 @@
 """
 Abstract type for pivot candidate generation strategies
 """
-abstract type AbstractSweep2sitePathProper end
+abstract type AbstractSweep2sitePathProposer end
 
 """
 Default strategy
 """
-struct DefaultSweep2sitePathProper <: AbstractSweep2sitePathProper end
+struct DefaultSweep2sitePathProposer <: AbstractSweep2sitePathProposer end
 
 """
 Random strategy
 """
-struct RandomSweep2sitePathProper <: AbstractSweep2sitePathProper end
+struct RandomSweep2sitePathProposer <: AbstractSweep2sitePathProposer end
 
 """
 LocalAdjacent strategy
 """
-struct LocalAdjacentSweep2sitePathProper <: AbstractSweep2sitePathProper end
+struct LocalAdjacentSweep2sitePathProposer <: AbstractSweep2sitePathProposer end
 
 """
 Default strategy that return the sequence path defined by the edges(g)
 """
 function generate_sweep2site_path(
-    ::DefaultSweep2sitePathProper,
+    ::DefaultSweep2sitePathProposer,
     tci::SimpleTCI{ValueType},
 ) where {ValueType}
     return collect(edges(tci.g))
@@ -32,7 +32,7 @@ end
 Random strategy that returns a random sequence of edges
 """
 function generate_sweep2site_path(
-    ::RandomSweep2sitePathProper,
+    ::RandomSweep2sitePathProposer,
     tci::SimpleTCI{ValueType},
 ) where {ValueType}
     return shuffle(collect(edges(tci.g)))
@@ -42,7 +42,7 @@ end
 LocalAdjacent strategy that runs through within all indices of site tensor according to the bond and connect them with IJSet from neighbors
 """
 function generate_sweep2site_path(
-    ::LocalAdjacentSweep2sitePathProper,
+    ::LocalAdjacentSweep2sitePathProposer,
     tci::SimpleTCI{ValueType};
     origin_edge = undef,
 ) where {ValueType}

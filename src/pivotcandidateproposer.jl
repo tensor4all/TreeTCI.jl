@@ -1,18 +1,18 @@
 """
 Abstract type for pivot candidate generation strategies
 """
-abstract type AbstractPivotCandidateProper end
+abstract type AbstractPivotCandidateProposer end
 
 """
 Default strategy that uses kronecker product and union with extra indices
 """
-struct DefaultPivotCandidateProper <: AbstractPivotCandidateProper end
+struct DefaultPivotCandidateProposer <: AbstractPivotCandidateProposer end
 
 """
 Default strategy that runs through within all indices of site tensor according to the bond and connect them with IJSet from neighbors
 """
 function generate_pivot_candidates(
-    ::DefaultPivotCandidateProper,
+    ::DefaultPivotCandidateProposer,
     tci::SimpleTCI{ValueType},
     edge::NamedEdge,
     extraIJset::Dict{SubTreeVertex,Vector{MultiIndex}},
@@ -59,6 +59,10 @@ function kronecker(
 
     site_index = findfirst(==(site), Outkey)
     filtered_subregions = filter(x -> x ≠ Set([site]), Outkey)
+
+    if site_index === nothing
+        return MultiIndex[]
+    end
 
     return MultiIndex[
         [is[1:site_index-1]..., j, is[site_index+1:end]...] for is in pivotset,
