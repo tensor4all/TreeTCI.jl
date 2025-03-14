@@ -34,7 +34,7 @@ end
         kwargs...
     ) where {ValueType,N}
 
-Cross interpolate a function ``f(\mathbf{u})`` using the 2-site TCI algorithm.
+Cross interpolate a function using the 2-site TCI algorithm.
 
 # Arguments:
 - `ValueType` is the return type of `f`. Automatic inference is too error-prone.
