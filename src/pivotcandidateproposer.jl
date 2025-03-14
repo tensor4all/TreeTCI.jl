@@ -38,27 +38,43 @@ function generate_pivot_candidates(
     return (Ikey => Jkey), Dict(Ikey => Icombined, Jkey => Jcombined)
 end
 
+
+"""
+    kronecker(IJset, target_subtree, source_subtrees, target_site, local_dim)
+
+Generates an index set for a tensor network subspace.
+
+# Arguments
+- `IJset::Dict{SubTreeVertex,Vector{MultiIndex}}`: Dictionary containing existing index sets
+- `target_subtree::SubTreeVertex`: Subtree vertex to which the resulting indices will be applied
+- `source_subtrees::Vector{SubTreeVertex}`: List of subtree vertices used as input sources
+- `target_site::Int`: The specific site where local dimension values will be inserted
+- `local_dim::Int`: Local dimension of the site (number of possible states)
+
+# Returns
+- `Vector{MultiIndex}`: List of generated indices
+"""
 function kronecker(
     IJset::Dict{SubTreeVertex,Vector{MultiIndex}},
-    Outkey::SubTreeVertex,  # original subregions order
-    Inkeys::Vector{SubTreeVertex},  # original subregions order
-    site::Int,          # direct connected site
-    localdim::Int,
-)
+    target_subtree::SubTreeVertex,
+    source_subtrees::Vector{SubTreeVertex},
+    target_site::Int,
+    local_dim::Int,
+)::Vector{MultiIndex}
     pivotset = MultiIndex[]
-    for indices in Iterators.product((IJset[inkey] for inkey in Inkeys)...)
-        indexset = zeros(Int, length(Outkey))
-        for (inkey, index) in zip(Inkeys, indices)
+    for indices in Iterators.product((IJset[inkey] for inkey in source_subtrees)...)
+        indexset = zeros(Int, length(target_subtree))
+        for (inkey, index) in zip(source_subtrees, indices)
             for (idx, key) in enumerate(inkey)
-                id = findfirst(==(key), Outkey)
+                id = findfirst(==(key), target_subtree)
                 indexset[id] = index[idx]
             end
         end
         push!(pivotset, indexset)
     end
 
-    site_index = findfirst(==(site), Outkey)
-    filtered_subregions = filter(x -> x ≠ Set([site]), Outkey)
+    site_index = findfirst(==(target_site), target_subtree)
+    filtered_subregions = filter(x -> x ≠ Set([target_site]), target_subtree)
 
     if site_index === nothing
         return MultiIndex[]
@@ -66,6 +82,6 @@ function kronecker(
 
     return MultiIndex[
         [is[1:site_index-1]..., j, is[site_index+1:end]...] for is in pivotset,
-        j = 1:localdim
+        j = 1:local_dim
     ][:]
 end
