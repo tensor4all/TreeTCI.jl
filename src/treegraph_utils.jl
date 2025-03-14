@@ -52,10 +52,12 @@ end
 
 function candidateedges(g::NamedGraph, edge::NamedEdge)::Vector{NamedEdge}
     p, q = separatevertices(g, edge)
-    candidates = unique(vcat(
-        adjacentedges(g, p; combinededges = edge),
-        adjacentedges(g, q; combinededges = edge)
-    ))
+    candidates = unique(
+        vcat(
+            adjacentedges(g, p; combinededges = edge),
+            adjacentedges(g, q; combinededges = edge),
+        ),
+    )
     return candidates
 end
 

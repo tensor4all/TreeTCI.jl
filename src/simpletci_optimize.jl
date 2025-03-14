@@ -162,12 +162,7 @@ function updatepivots!(
 
     N = length(tci.localdims)
 
-    combinedIJset = generate_pivot_candidates(
-        pivotstrategy,
-        tci,
-        edge,
-        maxbonddim = maxbonddim,
-    )
+    combinedIJset = generate_pivot_candidates(pivotstrategy, tci, edge)
     keys_array = collect(keys(combinedIJset))
     Ikey, Jkey = first(keys_array), last(keys_array)
 

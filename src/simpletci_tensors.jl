@@ -16,7 +16,10 @@
     - `sitetensors::Vector{Pair{Array{ValueType},Vector{NamedEdge}}}`: The site tensors and the edges connecting them to form TensorNetwork by using the SimpleTCI instance.
 """
 function fillsitetensors(
-    tci::SimpleTCI{ValueType}, f; center_vertex::Int = 0) where {ValueType}
+    tci::SimpleTCI{ValueType},
+    f;
+    center_vertex::Int = 0,
+) where {ValueType}
 
     sitetensors =
         Vector{Pair{Array{ValueType},Vector{NamedEdge}}}(undef, length(vertices(tci.g)))
