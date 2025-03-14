@@ -35,7 +35,6 @@ Optimize the SimpleTCI instance by iteratively updating pivots.
 - The SimpleTCI object will be modified in place.
 - Set `tolerance` to be > 0 or `maxbonddim` to some reasonable value. Otherwise, convergence is not reachable.
 
-See also: [`crossinterpolate`](@ref)
 """
 function optimize!(
     tci::SimpleTCI{ValueType},

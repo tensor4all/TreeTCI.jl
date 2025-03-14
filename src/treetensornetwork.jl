@@ -24,7 +24,7 @@ mutable struct TreeTensorNetwork{ValueType}
     end
 end
 
-@doc raw"""
+@doc """
     function crossinterpolate(
         ::Type{ValueType},
         f,
@@ -54,10 +54,24 @@ Cross interpolate a function ``f(\mathbf{u})`` using the 2-site TCI algorithm.
 - `normalizeerror::Bool = true`: Whether to normalize errors
 - `ncheckhistory::Int = 3`: Number of history steps to check
 
+# Returns
+- `ttn::TreeTensorNetwork`: A `TreeTensorNetwork` object
+- `ranks::Vector{Int}`: The ranks of the tensors in the `TreeTensorNetwork`
+- `errors::Vector{Float64}`: The errors of the tensors in the `TreeTensorNetwork`
+
 Notes:
 - Set `tolerance` to be > 0 or `maxbonddim` to some reasonable value. Otherwise, convergence is not reachable.
 - By default, no caching takes place. Use the [`CachedFunction`](@ref) wrapper if your function is expensive to evaluate.
 
+# Example
+```julia
+g = NamedGraph([1, 2, 3])
+add_edge!(g, 1 => 2)
+add_edge!(g, 2 => 3)
+f(x) = x[1] + x[2] * x[3]
+localdims = [2, 2, 2]
+ttn = crossinterpolate(f, localdims, g)
+```
 
 See also: [`optimize!`](@ref)
 """
