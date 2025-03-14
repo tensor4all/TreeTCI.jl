@@ -14,7 +14,7 @@ function subtreevertices(
     if children isa Int
         children = [children]
     end
-    grandchildren = []
+    grandchildren = Int[]
     for child in children
         candidates = outneighbors(g, child)
         candidates = [cand for cand in candidates if cand != parent]
@@ -52,9 +52,10 @@ end
 
 function candidateedges(g::NamedGraph, edge::NamedEdge)::Vector{NamedEdge}
     p, q = separatevertices(g, edge)
-    candidates =
-        adjacentedges(g, p; combinededges = edge) ∪
+    candidates = unique(vcat(
+        adjacentedges(g, p; combinededges = edge),
         adjacentedges(g, q; combinededges = edge)
+    ))
     return candidates
 end
 

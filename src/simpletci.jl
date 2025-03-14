@@ -1,27 +1,57 @@
 MultiIndex = Vector{Int}
 SubTreeVertex = Vector{Int}
 
+@doc """
+    SimpleTCI{ValueType}
+
+Tree tensor cross interpolation (TCI) for tree tensor networks.
+
+# Fields
+- `IJset::Dict{SubTreeVertex,Vector{MultiIndex}}`: Pivots sets for each subtrees
+- `localdims::Vector{Int}`: Local dimensions for each vertex tensor
+- `g::NamedGraph`: Tree graph structure
+- `bonderrors::Dict{NamedEdge,Float64}`: Error estimate per bond by 2-site sweep
+- `pivoterrors::Vector{Float64}`: Error estimate for backtruncation of bonds
+- `maxsamplevalue::Float64`: Maximum sample value for error normalization
+- `IJset_history::Vector{Dict{SubTreeVertex,Vector{MultiIndex}}}`: History of pivots sets for each sweep
+
+# Example
+```julia
+# Create a simple tree graph
+g = NamedGraph([1, 2, 3])
+add_edge!(g, 1 => 2)
+add_edge!(g, 2 => 3)
+
+# Define local dimensions
+localdims = [2, 2, 2]
+
+# Create a SimpleTCI instance
+tci = SimpleTCI{Float64}(localdims, g)
+
+# Add initial pivots
+addglobalpivots!(tci, [[1,1,1], [2,1,1]])
+```
+"""
 mutable struct SimpleTCI{ValueType}
     IJset::Dict{SubTreeVertex,Vector{MultiIndex}}
     localdims::Vector{Int}
     g::NamedGraph
-    #"Error estimate per bond by 2site sweep."
-    bonderrors::Dict{NamedEdge,Float64} # key is the bond id
-    # "Error estimate for backtruncation of bonds."
-    pivoterrors::Vector{Float64} # key is the bond id
-    #"Maximum sample for error normalization."
+    bonderrors::Dict{NamedEdge,Float64}
+    pivoterrors::Vector{Float64}
     maxsamplevalue::Float64
     IJset_history::Vector{Dict{SubTreeVertex,Vector{MultiIndex}}}
 
     function SimpleTCI{ValueType}(localdims::Vector{Int}, g::NamedGraph) where {ValueType}
-        length(localdims) > 1 || error("localdims should have at least 2 elements!")
         n = length(localdims)
+        n > 1 || error("localdims should have at least 2 elements!")
+        n == length(vertices(g)) || error(
+            "The number of vertices in the graph must be equal to the length of localdims.",
+        )
+        !Graphs.is_cyclic(g) ||
+            error("SimpleTCI is not supported for loopy tensor network.")
 
         # assign the key for each bond
         bonderrors = Dict(e => 0.0 for e in edges(g))
-
-        !Graphs.is_cyclic(g) ||
-            error("TreeTensorNetwork is not supported for loopy tensor network.")
 
         new{ValueType}(
             Dict{SubTreeVertex,Vector{MultiIndex}}(),               # IJset
@@ -35,6 +65,10 @@ mutable struct SimpleTCI{ValueType}
     end
 end
 
+"""
+ Initialize a SimpleTCI instance with a function, local dimensions, and graph.
+ The initial grobal pivots are set to ones(Int, length(localdims)).
+"""
 function SimpleTCI{ValueType}(
     func::F,
     localdims::Vector{Int},
@@ -49,14 +83,14 @@ function SimpleTCI{ValueType}(
     return tci
 end
 
-@doc """
- Add global pivots to index sets
- """
+"""
+ Add global pivots to IJset.
+"""
 function addglobalpivots!(
     tci::SimpleTCI{ValueType},
     pivots::Vector{MultiIndex},
 ) where {ValueType}
-    if any(length(tci.localdims) .!= length.(pivots)) # AbstructTreeTensorNetworkをから引き継ぎlength(tci)ができると良い
+    if any(length(tci.localdims) .!= length.(pivots))
         throw(DimensionMismatch("Please specify a pivot as one index per leg of the TTN."))
     end
     for pivot in pivots
@@ -71,16 +105,15 @@ function addglobalpivots!(
             if !haskey(tci.IJset, Jset_key)
                 tci.IJset[Jset_key] = Vector{MultiIndex}()
             end
-            pushunique!(tci.IJset[Iset_key], [pivot[i] for i in Iset_key])
-            pushunique!(tci.IJset[Jset_key], [pivot[j] for j in Jset_key])
+            pushunique!(tci.IJset[Iset_key], MultiIndex([pivot[i] for i in Iset_key]))
+            pushunique!(tci.IJset[Jset_key], MultiIndex([pivot[j] for j in Jset_key]))
         end
     end
 
-    tci.IJset[[i for i = 1:length(tci.localdims)]] = Int[]
+    tci.IJset[[i for i = 1:length(tci.localdims)]] = MultiIndex[]
 
     nothing
 end
-
 
 function pushunique!(collection, item)
     if !(item in collection)
