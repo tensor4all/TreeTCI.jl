@@ -8,6 +8,10 @@ Default strategy that uses kronecker product and union with extra indices
 """
 struct DefaultPivotCandidateProposer <: AbstractPivotCandidateProposer end
 
+"""
+Truncated default strategy that uses kronecker product and union with extra indices
+"""
+struct TruncatedDefaultPivotCandidateProposer <: AbstractPivotCandidateProposer end
 
 """
 Simple strategy that uses kronecker product and union with extra indices
@@ -52,7 +56,7 @@ function generate_pivot_candidates(
 end
 
 function generate_pivot_candidates(
-    ::SimplePivotCandidateProposer,
+    ::TruncatedDefaultPivotCandidateProposer,
     tci::SimpleTCI{ValueType},
     edge::NamedEdge,
 ) where {ValueType}
@@ -66,6 +70,29 @@ function generate_pivot_candidates(
         key in keys(IJcombined)
     )
     return IJcombined
+end
+
+function generate_pivot_candidates(
+    ::SimplePivotCandidateProposer,
+    tci::SimpleTCI{ValueType},
+    edge::NamedEdge,
+) where {ValueType}
+    vp, vq = separatevertices(tci.g, edge)
+    Ikey = subtreevertices(tci.g, vq => vp)
+    Ichi = 2 * length(tci.IJset[Ikey])
+    Iset = [[rand(1:tci.localdims[i]) for i in Ikey] for _ = 1:Ichi]
+
+    Jkey = subtreevertices(tci.g, vp => vq)
+    Jchi = 2 * length(tci.IJset[Jkey])
+    Jset = [[rand(1:tci.localdims[j]) for j in Jkey] for _ = 1:Jchi]
+    extraIJset = if length(tci.IJset_history) > 0
+        extraIJset = tci.IJset_history[end]
+    else
+        Dict(key => MultiIndex[] for key in keys(tci.IJset))
+    end
+    Icombined = union(Iset, extraIJset[Ikey])
+    Jcombined = union(Jset, extraIJset[Jkey])
+    return Dict(Ikey => Icombined, Jkey => Jcombined)
 end
 
 
