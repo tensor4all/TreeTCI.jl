@@ -61,9 +61,11 @@ function generate_pivot_candidates(
     edge::NamedEdge,
 ) where {ValueType}
     vp, vq = separatevertices(tci.g, edge)
+
     Ikey = subtreevertices(tci.g, vq => vp)
     Jkey = subtreevertices(tci.g, vp => vq)
-    chis = Dict(Ikey => 2 * length(tci.IJset[Ikey]), Jkey => 2 * length(tci.IJset[Jkey]))
+    chis = Dict(Ikey => tci.localdims[vp] * length(tci.IJset[Ikey]), Jkey => tci.localdims[vq] * length(tci.IJset[Jkey]))
+
     IJcombined = generate_pivot_candidates(DefaultPivotCandidateProposer(), tci, edge)
     IJcombined = Dict(
         key => sample_ordered_pivots(IJcombined[key], chis[key]) for
@@ -78,12 +80,13 @@ function generate_pivot_candidates(
     edge::NamedEdge,
 ) where {ValueType}
     vp, vq = separatevertices(tci.g, edge)
+
     Ikey = subtreevertices(tci.g, vq => vp)
-    Ichi = 2 * length(tci.IJset[Ikey])
+    Ichi = tci.localdims[vp] * length(tci.IJset[Ikey])
     Iset = [[rand(1:tci.localdims[i]) for i in Ikey] for _ = 1:Ichi]
 
     Jkey = subtreevertices(tci.g, vp => vq)
-    Jchi = 2 * length(tci.IJset[Jkey])
+    Jchi = tci.localdims[vq] * length(tci.IJset[Jkey])
     Jset = [[rand(1:tci.localdims[j]) for j in Jkey] for _ = 1:Jchi]
     extraIJset = if length(tci.IJset_history) > 0
         extraIJset = tci.IJset_history[end]
