@@ -48,7 +48,7 @@ function generate_sweep2site_path(
 ) where {ValueType}
     edge_path = Vector{NamedEdge}()
 
-    n = length(tci.localdims) # TODO: Implement for AbstractTreeTensorNetwork
+    n = length(vertices(tci.g))
 
     # choose the center bond id.
     if origin_edge == undef
@@ -72,7 +72,8 @@ function generate_sweep2site_path(
     while true
 
         candidates = candidateedges(tci.g, center_edge)
-        candidates = filter(e -> flags[e] == 0, candidates)
+        candidates = [e for e in candidates if flags[e] == 0]
+
 
         # If candidates is empty, exit while loop
         if isempty(candidates)
