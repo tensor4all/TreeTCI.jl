@@ -14,109 +14,75 @@ Truncated default strategy that uses kronecker product and union with extra indi
 struct TruncatedDefaultPivotCandidateProposer <: AbstractPivotCandidateProposer end
 
 """
-Simple strategy that uses kronecker product and union with extra indices
-"""
-struct SimplePivotCandidateProposer <: AbstractPivotCandidateProposer end
-
-"""
 Default strategy that runs through within all indices of site tensor according to the bond and connect them with IJSet from neighbors
 """
 function generate_pivot_candidates(
     ::DefaultPivotCandidateProposer,
     tci::SimpleTCI{ValueType},
-    edge::NamedEdge,
+    site::Int,
+    subkeys::Vector{SubTreeVertex},
 ) where {ValueType}
 
-    vp, vq = separatevertices(tci.g, edge)
-    Ikey = subtreevertices(tci.g, vq => vp)
-    Jkey = subtreevertices(tci.g, vp => vq)
-
-    adjacent_edges_vp = adjacentedges(tci.g, vp; combinededges = edge)
-    InIkeys = edgeInIJkeys(tci.g, vp, adjacent_edges_vp)
-    Ipivots = pivotset(tci.IJset, InIkeys, Ikey, tci.localdims[vp])
-    Isite_index = findfirst(==(vp), Ikey)
-
-    adjacent_edges_vq = adjacentedges(tci.g, vq; combinededges = edge)
-    InJkeys = edgeInIJkeys(tci.g, vq, adjacent_edges_vq)
-    Jpivots = pivotset(tci.IJset, InJkeys, Jkey, tci.localdims[vq])
-    Jsite_index = findfirst(==(vq), Jkey)
-
-    Iset = kronecker(Ipivots, Isite_index, tci.localdims[vp])
-    Jset = kronecker(Jpivots, Jsite_index, tci.localdims[vq])
-
-    extraIJset = if length(tci.IJset_history) > 0
-        extraIJset = tci.IJset_history[end]
+    if isempty(subkeys)
+        Outkey = [site]
+        pivots = [fill(0, 1)]
+        site_index = 1
     else
-        Dict(key => MultiIndex[] for key in keys(tci.IJset))
+        Outkey, pivots = pivotset_with_site_index(tci.IJset, subkeys, site)
+        site_index = findfirst(==(site), Outkey)
     end
 
-    Icombined = union(Iset, extraIJset[Ikey])
-    Jcombined = union(Jset, extraIJset[Jkey])
-    return Dict(Ikey => Icombined, Jkey => Jcombined)
+    Iset = kronecker(pivots, site_index, tci.localdims[site])
+
+    extraIJset = !isempty(tci.IJset_history) ?
+        tci.IJset_history[end] :
+        Dict(key => MultiIndex[] for key in keys(tci.IJset))
+
+    extraIJset = get(extraIJset, Outkey, MultiIndex[])
+
+    return Outkey => union(Iset, extraIJset)
 end
+
 
 function generate_pivot_candidates(
     ::TruncatedDefaultPivotCandidateProposer,
     tci::SimpleTCI{ValueType},
-    edge::NamedEdge,
+    site::Int,
+    subkeys::Vector{SubTreeVertex},
 ) where {ValueType}
-    vp, vq = separatevertices(tci.g, edge)
-
-    Ikey = subtreevertices(tci.g, vq => vp)
-    Jkey = subtreevertices(tci.g, vp => vq)
-    chis = Dict(Ikey => tci.localdims[vp] * length(tci.IJset[Ikey]), Jkey => tci.localdims[vq] * length(tci.IJset[Jkey]))
-
-    IJcombined = generate_pivot_candidates(DefaultPivotCandidateProposer(), tci, edge)
-    IJcombined = Dict(
-        key => sample_ordered_pivots(IJcombined[key], chis[key]) for
-        key in keys(IJcombined)
-    )
-    return IJcombined
+    outkey, pivots = generate_pivot_candidates(DefaultPivotCandidateProposer(), tci, site, subkeys)
+    chis = tci.localdims[site] * length(tci.IJset[outkey])
+    pivots = sample_ordered_pivots(pivots, chis)
+    return outkey => pivots
 end
 
-function generate_pivot_candidates(
-    ::SimplePivotCandidateProposer,
-    tci::SimpleTCI{ValueType},
-    edge::NamedEdge,
-) where {ValueType}
-    vp, vq = separatevertices(tci.g, edge)
-
-    Ikey = subtreevertices(tci.g, vq => vp)
-    Ichi = tci.localdims[vp] * length(tci.IJset[Ikey])
-    Iset = [[rand(1:tci.localdims[i]) for i in Ikey] for _ = 1:Ichi]
-
-    Jkey = subtreevertices(tci.g, vp => vq)
-    Jchi = tci.localdims[vq] * length(tci.IJset[Jkey])
-    Jset = [[rand(1:tci.localdims[j]) for j in Jkey] for _ = 1:Jchi]
-    extraIJset = if length(tci.IJset_history) > 0
-        extraIJset = tci.IJset_history[end]
-    else
-        Dict(key => MultiIndex[] for key in keys(tci.IJset))
-    end
-    Icombined = union(Iset, extraIJset[Ikey])
-    Jcombined = union(Jset, extraIJset[Jkey])
-    return Dict(Ikey => Icombined, Jkey => Jcombined)
-end
-
-
-function pivotset(
-    IJset::Dict{SubTreeVertex,Vector{MultiIndex}},
+function pivotset_with_site_index(
+    IJset::Dict{SubTreeVertex, Vector{MultiIndex}},
     Inkeys::Vector{SubTreeVertex},
-    Outkey::SubTreeVertex,  # original subregions order
-    localdim::Int,
-)
-    pivotset = MultiIndex[]
+    site::Int,
+)::Tuple{SubTreeVertex, Vector{MultiIndex}}
+    if isempty(Inkeys)
+        # Only the site index remains, which implies it's the root or core
+        return [[0 for _ in 1:1]], 1  # 1-dimensional zero index, index 1 is the site
+    end
+
+    all_keys = sort(unique(reduce(vcat, Inkeys)))
+    idx = searchsortedfirst(all_keys, site)
+    Outkey = insert!(copy(all_keys), idx, site)
+
+    pivots = MultiIndex[]
     for indices in Iterators.product((IJset[inkey] for inkey in Inkeys)...)
         indexset = zeros(Int, length(Outkey))
         for (inkey, index) in zip(Inkeys, indices)
-            for (idx, key) in enumerate(inkey)
-                id = findfirst(==(key), Outkey)
-                indexset[id] = index[idx]
+            for (j, key) in enumerate(inkey)
+                id = searchsortedfirst(Outkey, key)
+                indexset[id] = index[j]
             end
         end
-        push!(pivotset, indexset)
+        push!(pivots, indexset)
     end
-    return pivotset
+
+    return Outkey, pivots
 end
 
 function sample_ordered_pivots(pivots::Vector{MultiIndex}, maxsize::Int)

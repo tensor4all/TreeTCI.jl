@@ -39,6 +39,7 @@ Optimize the SimpleTCI instance by iteratively updating pivots.
 function optimize!(
     tci::SimpleTCI{ValueType},
     f;
+    structural_search::Bool = false,
     tolerance::Float64 = 1e-8,
     maxbonddim::Int = typemax(Int),
     maxiter::Int = 20,
@@ -76,6 +77,7 @@ function optimize!(
             tci,
             f,
             2;
+            structural_search = structural_search,
             abstol = abstol,
             maxbonddim = maxbonddim,
             verbosity = verbosity,
@@ -113,6 +115,7 @@ function sweep2site!(
     tci::SimpleTCI{ValueType},
     f,
     niter::Int;
+    structural_search::Bool = false,
     abstol::Float64 = 1e-8,
     maxbonddim::Int = typemax(Int),
     sweepstrategy::AbstractSweep2sitePathProposer = DefaultSweep2sitePathProposer(),
@@ -130,15 +133,18 @@ function sweep2site!(
         flushpivoterror!(tci)
 
         for edge in edge_path
-            updatepivots!(
-                tci,
-                edge,
-                f;
-                abstol = abstol,
-                maxbonddim = maxbonddim,
-                pivotstrategy = pivotstrategy,
-                verbosity = verbosity,
-            )
+            if edge in edges(tci.g)
+                updatepivots!(
+                    tci,
+                    edge,
+                    f;
+                    structural_search = structural_search,
+                    abstol = abstol,
+                    maxbonddim = maxbonddim,
+                    pivotstrategy = pivotstrategy,
+                    verbosity = verbosity,
+                )
+            end
         end
     end
 
@@ -152,6 +158,7 @@ function updatepivots!(
     tci::SimpleTCI{ValueType},
     edge::NamedEdge,
     f::F;
+    structural_search::Bool = false,
     reltol::Float64 = 1e-14,
     abstol::Float64 = 0.0,
     maxbonddim::Int = typemax(Int),
@@ -161,23 +168,29 @@ function updatepivots!(
 
     N = length(tci.localdims)
 
-    combinedIJset = generate_pivot_candidates(pivotstrategy, tci, edge)
-    keys_array = collect(keys(combinedIJset))
-    Ikey, Jkey = first(keys_array), last(keys_array)
+    if structural_search
+        updatestructure!(tci, f, edge)
+    end
 
-    t1 = time_ns()
+    vp, vq = separatevertices(tci.g, edge)
+    sites = [vp, vq]
+
+    possible_subtrees = generate_possible_subtrees(DefaultPossibleSubtreesProposer(), tci, sites)
+    I_subtree, J_subtree = first(possible_subtrees)
+    Ioutkey, Ipivots = generate_pivot_candidates(pivotstrategy, tci, vp, I_subtree)
+    Joutkey, Jpivots = generate_pivot_candidates(pivotstrategy, tci, vq, J_subtree)
+    dict = Dict(Ioutkey => Ipivots, Joutkey => Jpivots)
+
     Pi = reshape(
-        filltensor(ValueType, f, tci.localdims, combinedIJset, [Ikey], [Jkey], Val(0)),
-        length(combinedIJset[Ikey]),
-        length(combinedIJset[Jkey]),
-    )
-    t2 = time_ns()
+        filltensor(ValueType, f, tci.localdims, dict, [Ioutkey], [Joutkey], Val(0)),
+        length(dict[Ioutkey]),
+        length(dict[Joutkey]),
+        )
 
     updatemaxsample!(tci, Pi)
 
     luci = TCI.MatrixLUCI(Pi, reltol = reltol, abstol = abstol, maxrank = maxbonddim)
 
-    t3 = time_ns()
     if verbosity > 2
         x, y = length(combinedIJset[Ikey]),
         length(combinedIJset[Jkey]),
@@ -186,11 +199,50 @@ function updatepivots!(
         )
     end
 
-    tci.IJset[Ikey] = combinedIJset[Ikey][TCI.rowindices(luci)]
-    tci.IJset[Jkey] = combinedIJset[Jkey][TCI.colindices(luci)]
+    tci.IJset[Ioutkey] = Ipivots[TCI.rowindices(luci)]
+    tci.IJset[Joutkey] = Jpivots[TCI.colindices(luci)]
 
     updateerrors!(tci, edge, TCI.pivoterrors(luci))
     nothing
+end
+
+function updatestructure!(tci::SimpleTCI{ValueType}, f::F, edge::NamedEdge) where {F, ValueType}
+    vp, vq = separatevertices(tci.g, edge)
+    sites = [vp, vq]
+    singularvalues_vector = Vector{Vector{ValueType}}()
+    possible_subtrees = generate_possible_subtrees(StructuralSearchPossibleSubtreesProposer(), tci, sites, 3)
+
+    for (I_subtree, J_subtree) in possible_subtrees
+        Ioutkey, Ipivots = generate_pivot_candidates(DefaultPivotCandidateProposer(), tci, vp, I_subtree)
+        Joutkey, Jpivots = generate_pivot_candidates(DefaultPivotCandidateProposer(), tci, vq, J_subtree)
+        dict = Dict(Ioutkey => Ipivots, Joutkey => Jpivots)
+
+        Pi = reshape(
+            filltensor(ValueType, f, tci.localdims, dict, [Ioutkey], [Joutkey], Val(0)),
+            length(dict[Ioutkey]),
+            length(dict[Joutkey]),
+        )
+        # svd
+        U, S, V = svd(Pi)
+        push!(singularvalues_vector, S)
+    end
+    optimal_index = generate_optimal_structure(EntanglementOptimalStructureProposer(), tci, singularvalues_vector)
+
+    subI = setdiff(neighbors(tci.g, vp), [vq])
+    subJ = setdiff(neighbors(tci.g, vq), [vp])
+
+    foreach(v -> rem_edge!(tci.g, v => vp), subI)
+    foreach(v -> rem_edge!(tci.g, v => vq), subJ)
+
+    all_children = vcat(subI, subJ)
+    optimalI, optimalJ = possible_subtrees[optimal_index]
+    for v in all_children
+        if any(subtree -> v in subtree, optimalI)
+            add_edge!(tci.g, v => vp)
+        elseif any(subtree -> v in subtree, optimalJ)
+            add_edge!(tci.g, v => vq)
+        end
+    end
 end
 
 function updatemaxsample!(tci::SimpleTCI{V}, samples::Array{V}) where {V}

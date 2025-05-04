@@ -86,6 +86,8 @@ function crossinterpolate(
 ) where {ValueType,N}
     tci = SimpleTCI{ValueType}(f, localdims, g, initialpivots)
     ranks, errors = optimize!(tci, f; kwargs...)
+    new_kwrgs = merge((structural_search = true,), kwargs)
+    ranks, errors = optimize!(tci, f; new_kwrgs...)
     sitetensors = fillsitetensors(tci, f)
     return TreeTensorNetwork(tci.g, sitetensors), ranks, errors
 end
@@ -120,4 +122,8 @@ end
 # Add length method for TreeTensorNetwork
 function Base.length(ttn::TreeTensorNetwork)
     return length(vertices(ttn.tensornetwork.data_graph))
+end
+
+function graph(ttn::TreeTensorNetwork)
+    return ttn.tensornetwork.data_graph.underlying_graph
 end
