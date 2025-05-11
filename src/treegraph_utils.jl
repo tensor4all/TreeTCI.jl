@@ -14,7 +14,7 @@ function subtreevertices(
     if children isa Int
         children = [children]
     end
-    grandchildren = []
+    grandchildren = Int[]
     for child in children
         candidates = outneighbors(g, child)
         candidates = [cand for cand in candidates if cand != parent]
@@ -35,8 +35,8 @@ end
 function adjacentedges(
     g::NamedGraph,
     vertex::Int;
-    combinededges::Union{NamedEdge, Vector{NamedEdge}} = Vector{NamedEdge}()
-) ::Vector{NamedEdge}
+    combinededges::Union{NamedEdge,Vector{NamedEdge}} = Vector{NamedEdge}(),
+)::Vector{NamedEdge}
     if combinededges isa NamedEdge
         combinededges = [combinededges]
     end
@@ -50,39 +50,36 @@ function adjacentedges(
     return adjedges
 end
 
-function candidateedges(
-    g::NamedGraph,
-    edge::NamedEdge,
-)::Vector{NamedEdge}
+function candidateedges(g::NamedGraph, edge::NamedEdge)::Vector{NamedEdge}
     p, q = separatevertices(g, edge)
-    candidates = adjacentedges(g, p; combinededges=edge) ∪ adjacentedges(g, q; combinededges=edge)
+    candidates = unique(
+        vcat(
+            adjacentedges(g, p; combinededges = edge),
+            adjacentedges(g, q; combinededges = edge),
+        ),
+    )
     return candidates
 end
 
-function distanceedges(
-    g::NamedGraph,
-    edge::NamedEdge,
-)::Dict{NamedEdge,Int}
+function distanceedges(g::NamedGraph, edge::NamedEdge)::Dict{NamedEdge,Int}
     p, q = separatevertices(g, edge)
     distances = Dict{NamedEdge,Int}()
-    distances[edge] = 0
-    distances = distanceBFSedge(g, edge, distances)
-    return distances
-end
 
-function distanceBFSedge(
-    g::NamedGraph,
-    edge::NamedEdge,
-    distances::Dict{NamedEdge,Int},
-)::Dict{NamedEdge,Int}
-
-    candidates = candidateedges(g, edge)
-    candidates = filter(cand -> cand ∉ keys(distances), candidates)
-    for cand in candidates
-        distances[cand] = distances[edge] + 1
-        distances =
-            merge!(distances, distanceBFSedge(g, cand, distances))
+    function compute_distances(root, opposite, state)
+        for subvertex in filter(v -> v != root, subtreevertices(g, opposite => root))
+            parent = state.parents[subvertex]
+            e = NamedEdge(parent, subvertex)
+            distances[e ∈ edges(g) ? e : reverse(e)] = state.dists[subvertex]
+        end
     end
+
+    state_p = namedgraph_dijkstra_shortest_paths(g, p)
+    compute_distances(p, q, state_p)
+
+    state_q = namedgraph_dijkstra_shortest_paths(g, q)
+    compute_distances(q, p, state_q)
+
+    distances[edge] = 0
     return distances
 end
 

@@ -1,24 +1,54 @@
 """
 Abstract type for pivot candidate generation strategies
 """
-abstract type Sweep2sitePathProper end
+abstract type AbstractSweep2sitePathProposer end
 
 """
-Default strategy that uses kronecker product and union with extra indices
+Default strategy
 """
-struct DefaultSweep2sitePathProper <: Sweep2sitePathProper end
+struct DefaultSweep2sitePathProposer <: AbstractSweep2sitePathProposer end
 
 """
-Default strategy that runs through within all indices of site tensor according to the bond and connect them with IJSet from neighbors
+Random strategy
+"""
+struct RandomSweep2sitePathProposer <: AbstractSweep2sitePathProposer end
+
+"""
+LocalAdjacent strategy
+"""
+struct LocalAdjacentSweep2sitePathProposer <: AbstractSweep2sitePathProposer end
+
+"""
+Default strategy that return the sequence path defined by the edges(g)
 """
 function generate_sweep2site_path(
-    ::DefaultSweep2sitePathProper,
+    ::DefaultSweep2sitePathProposer,
+    tci::SimpleTCI{ValueType},
+) where {ValueType}
+    return collect(edges(tci.g))
+end
+
+"""
+Random strategy that returns a random sequence of edges
+"""
+function generate_sweep2site_path(
+    ::RandomSweep2sitePathProposer,
+    tci::SimpleTCI{ValueType},
+) where {ValueType}
+    return shuffle(collect(edges(tci.g)))
+end
+
+"""
+LocalAdjacent strategy that runs through within all indices of site tensor according to the bond and connect them with IJSet from neighbors
+"""
+function generate_sweep2site_path(
+    ::LocalAdjacentSweep2sitePathProposer,
     tci::SimpleTCI{ValueType};
     origin_edge = undef,
 ) where {ValueType}
     edge_path = Vector{NamedEdge}()
 
-    n = length(tci.localdims) # TODO: Implement for AbstractTreeTensorNetwork
+    n = length(vertices(tci.g))
 
     # choose the center bond id.
     if origin_edge == undef
@@ -42,10 +72,8 @@ function generate_sweep2site_path(
     while true
 
         candidates = candidateedges(tci.g, center_edge)
-        candidates = filter(
-            e -> flags[e] == 0,
-            candidates
-        )
+        candidates = [e for e in candidates if flags[e] == 0]
+
 
         # If candidates is empty, exit while loop
         if isempty(candidates)

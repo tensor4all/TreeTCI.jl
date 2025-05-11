@@ -1,10 +1,28 @@
+@doc """
+    fillsitetensors(
+        tci::SimpleTCI{ValueType},
+        f;
+        center_vertex::Int = 0,
+    ) where {ValueType}
+
+    Fill the site tensors by using a SimpleTCI instance for a tree tensor network.
+    Center vertex is the vertex of the canonical center of the tree tensor network.
+
+    # Arguments
+    - `tci::SimpleTCI{ValueType}`: The SimpleTCI instance to fill the site tensors for.
+    - `f`: The function to use for filling the site tensors.
+
+    # Returns
+    - `sitetensors::Vector{Pair{Array{ValueType},Vector{NamedEdge}}}`: The site tensors and the edges connecting them to form TensorNetwork by using the SimpleTCI instance.
+"""
 function fillsitetensors(
     tci::SimpleTCI{ValueType},
     f;
     center_vertex::Int = 0,
 ) where {ValueType}
 
-    sitetensors = Vector{Pair{Array{ValueType},Vector{NamedEdge}}}(undef, length(vertices(tci.g)))
+    sitetensors =
+        Vector{Pair{Array{ValueType},Vector{NamedEdge}}}(undef, length(vertices(tci.g)))
 
     if center_vertex ∉ vertices(tci.g)
         center_vertex = first(vertices(tci.g))
@@ -18,17 +36,21 @@ function fillsitetensors(
         for child in children
             # adjacent_edges = adjacentedges(tci.g, child)
             parent = state.parents[child]
-            edge = filter(e -> src(e) == parent && dst(e) == child || dst(e) == parent && src(e) == child, edges(tci.g))
+            edge = filter(
+                e ->
+                    src(e) == parent && dst(e) == child ||
+                        dst(e) == parent && src(e) == child,
+                edges(tci.g),
+            )
             edge = isempty(edge) ? nothing : only(edge)
             incomingedges = setdiff(adjacentedges(tci.g, child), Set([edge]))
-            InKeys = !isempty(incomingedges) ? edgeInIJkeys(tci.g, child, incomingedges) : SubTreeVertex[]
+            InKeys =
+                !isempty(incomingedges) ? edgeInIJkeys(tci.g, child, incomingedges) :
+                SubTreeVertex[]
             OutKeys = edge != nothing ? edgeInIJkeys(tci.g, child, edge) : SubTreeVertex[]
             if d != 0
                 T = sitetensor(tci, child, edge, InKeys => OutKeys, f)
-                sitetensors[child] = T => vcat(
-                    incomingedges,
-                    [edge],
-                )
+                sitetensors[child] = T => vcat(incomingedges, [edge])
             else
                 T = sitetensor(tci, child, edge, InKeys => OutKeys, f, core = true)
                 sitetensors[child] = T => incomingedges
@@ -91,11 +113,11 @@ function sitetensor(
     length(tci.IJset[I1key]) == sum([length(tci.IJset[key]) for key in Outkeys]) || error("Pivot matrix at bond $(site) is not square!")
     Tmat = transpose(transpose(P) \ transpose(Pi1))
     T = reshape(
-            Tmat,
-            tci.localdims[site],
-            [length(tci.IJset[key]) for key in Inkeys]...,
-            [length(tci.IJset[key]) for key in Outkeys]...,
-        )
+        Tmat,
+        tci.localdims[site],
+        [length(tci.IJset[key]) for key in Inkeys]...,
+        [length(tci.IJset[key]) for key in Outkeys]...,
+    )
     return T
 end
 
@@ -109,6 +131,7 @@ function filltensor(
     Outkeys::Vector{SubTreeVertex},
     ::Val{M},
 )::Array{ValueType} where {ValueType,M}
+
     N = length(localdims)
     nin = sum([length(first(IJset[key])) for key in Inkeys])
     nout = sum([length(first(IJset[key])) for key in Outkeys])
@@ -130,6 +153,7 @@ function filltensor(
         expected_size...,
     )
 end
+
 
 function _call(
     ::Type{V},
@@ -186,11 +210,32 @@ function _call(
     return result
 end
 
-function edgeInIJkeys(
-    g::NamedGraph,
-    v::Int,
-    combinededges
-)
+@doc """
+    edgeInIJkeys(g::NamedGraph, v::Int, combinededges)
+
+    Get the pivots keys for the incoming direction at the vertex from connecting edges.
+
+    # Arguments
+    - `g::NamedGraph`: The graph to get the index sets for.
+    - `v::Int`: The vertex to get the index sets for.
+    - `combinededges::Union{NamedEdge,Vector{NamedEdge}}`: The edges to get the index sets for.
+
+    # Returns
+    - `keys::Vector{SubTreeVertex}`: The pivots keys for the incoming direction at the vertex from connecting edges.
+
+    # Example
+    ```julia
+    g = NamedGraph([1, 2, 3, 4])
+    add_edge!(g, 1 => 2)
+    add_edge!(g, 2 => 3)
+    add_edge!(g, 3 => 4)
+    @show edgeInIJkeys(g, 2, [2 => 3])
+    # [SubTreeVertex([2, 3, 4])]
+    @show edgeInIJkeys(g, 2, [1 => 2])
+    # [SubTreeVertex([1, 2])]
+    ```
+"""
+function edgeInIJkeys(g::NamedGraph, v::Int, combinededges)::Vector{SubTreeVertex}
     if combinededges isa NamedEdge
         combinededges = [combinededges]
     end
