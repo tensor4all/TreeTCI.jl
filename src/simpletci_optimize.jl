@@ -74,8 +74,7 @@ function optimize!(
 
         sweep2site!(
             tci,
-            f,
-            2;
+            f;
             abstol = abstol,
             maxbonddim = maxbonddim,
             verbosity = verbosity,
@@ -111,8 +110,7 @@ end
 """
 function sweep2site!(
     tci::SimpleTCI{ValueType},
-    f,
-    niter::Int;
+    f;
     abstol::Float64 = 1e-8,
     maxbonddim::Int = typemax(Int),
     sweepstrategy::AbstractSweep2sitePathProposer = DefaultSweep2sitePathProposer(),
@@ -122,24 +120,18 @@ function sweep2site!(
 
     edge_path = generate_sweep2site_path(sweepstrategy, tci)
 
-    for _ = 1:niter
-        extraIJset = Dict(key => MultiIndex[] for key in keys(tci.IJset))
+    flushpivoterror!(tci)
 
-        push!(tci.IJset_history, deepcopy(tci.IJset))
-
-        flushpivoterror!(tci)
-
-        for edge in edge_path
-            updatepivots!(
-                tci,
-                edge,
-                f;
-                abstol = abstol,
-                maxbonddim = maxbonddim,
-                pivotstrategy = pivotstrategy,
-                verbosity = verbosity,
-            )
-        end
+    for edge in edge_path
+        updatepivots!(
+            tci,
+            edge,
+            f;
+            abstol = abstol,
+            maxbonddim = maxbonddim,
+            pivotstrategy = pivotstrategy,
+            verbosity = verbosity,
+        )
     end
 
     nothing

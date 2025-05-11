@@ -30,6 +30,8 @@ function main()
     tci_new.converged_IJset = tci.converged_IJset
     ranks, errors = optimize!(tci_new, f; kwargs...)
 
+    @show tci.pivoterrors
+    @show tci_new.pivoterrors
     # TODO: Check the criterion between two structures.
     return 0
 end

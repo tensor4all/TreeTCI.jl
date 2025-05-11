@@ -1,7 +1,7 @@
 
 module TreeTCI
 include("imports.jl")
-include("tree_utils.jl")
+include("treegraph_utils.jl")
 include("simpletci.jl")
 include("pivotcandidateproposer.jl")
 include("sweep2sitepathproposer.jl")

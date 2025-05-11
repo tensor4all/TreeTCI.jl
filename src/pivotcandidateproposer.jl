@@ -44,10 +44,9 @@ function generate_pivot_candidates(
     Iset = kronecker(Ipivots, Isite_index, tci.localdims[vp])
     Jset = kronecker(Jpivots, Jsite_index, tci.localdims[vq])
 
-    extraIJset = if length(tci.IJset_history) > 0
-        extraIJset = tci.IJset_history[end]
-    else
-        Dict(key => MultiIndex[] for key in keys(tci.IJset))
+    extraIJset = tci.IJset
+    for (key, pivots) in tci.converged_IJset
+        extraIJset[key] = pivots
     end
 
     Icombined = union(Iset, extraIJset[Ikey])
