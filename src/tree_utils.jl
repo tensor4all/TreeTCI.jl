@@ -85,3 +85,42 @@ function distanceBFSedge(
     end
     return distances
 end
+
+function swap_2site!(
+    g::NamedGraph,
+    vs::Pair{Int, Int},
+)
+    p, q = vs
+    p_neighbors = neighbors(g, p)
+    q_neighbors = neighbors(g, q)
+
+    rem_vertices!(g, [p, q])
+
+    add_vertex!(g, p)
+    add_vertex!(g, q)
+
+    for p_i in p_neighbors
+        add_edge!(g, NamedEdge(p_i => q))
+    end
+
+    for q_i in q_neighbors
+        add_edge!(g,  NamedEdge(q_i => p))
+    end
+
+    p_neighbors = neighbors(g, p)
+    q_neighbors = neighbors(g, q)
+    return g
+end
+
+function add_subtree!(
+    g::NamedGraph,
+    v::Int,
+    edge::NamedEdge,
+)
+    p, q = separatevertices(g, edge)
+    p_regions = subtreevertices(g, q => p)
+    q_regions = subtreevertices(g, p => q)
+    parent = v in p_regions ? q : p
+    rem_edge!(g, edge)
+    add_edge!(g, NamedEdge(parent => v))
+end
