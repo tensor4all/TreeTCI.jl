@@ -17,13 +17,21 @@ function main()
 
     localdims = fill(2, length(vertices(g)))
     f(v) = 1 / (1 + v' * v)
-    kwargs = (maxbonddim = 20, maxiter = 10)
+    kwargs = (maxbonddim = 5, maxiter = 10)
     tci = SimpleTCI{Float64}(f, localdims, g, [ones(Int, length(localdims))])
     ranks, errors = optimize!(tci, f; kwargs...)
 
     # swap_2site!(g, 1 => 3)
-    add_subtree!(g, 6, NamedEdge(3 => 4))
+    tci_new = deepcopy(tci)
 
+    add_subtree!(tci_new.g, 6, NamedEdge(3 => 4)) # structural change
+
+    tci_new = SimpleTCI{Float64}(f, localdims, tci_new.g, [ones(Int, length(localdims))])
+    tci_new.converged_IJset = tci.converged_IJset
+    ranks, errors = optimize!(tci_new, f; kwargs...)
+
+    # TODO: Check the criterion between two structures.
+    return 0
 end
 
 main()
