@@ -1,10 +1,32 @@
 using Test
-using TreeTCI: SimpleTCI, optimize!, swap_2site!, add_subtree!
-import NamedGraphs: NamedGraph, NamedEdge, add_edge!, vertices, edges, has_edge
+using TreeTCI: crossinterpolate_adaptivetree, crossinterpolate
+using NamedGraphs: NamedGraph, add_edge!, vertices
+using Random
+
+function evaluate_error_sampled(f, ttn1, ttn2, localdims::Vector{Int}, nsamples::Int; rng=Random.default_rng())
+    total_error1 = 0.0
+    total_error2 = 0.0
+
+    for _ in 1:nsamples
+        xvec = [rand(rng, 1:d) for d in localdims]
+        fx = f(xvec)
+        total_error1 += abs(fx - ttn1(xvec))
+        total_error2 += abs(fx - ttn2(xvec))
+    end
+
+    mean_error1 = total_error1 / nsamples
+    mean_error2 = total_error2 / nsamples
+
+    println("Sampled mean |f(x) - original(x)| = ", mean_error1)
+    println("Sampled mean |f(x) - optimized(x)| = ", mean_error2)
+
+    return mean_error1, mean_error2
+end
+
 
 function main()
     # make graph
-    g = NamedGraph(10)
+    g = NamedGraph(8)
     add_edge!(g, 1, 2)
     add_edge!(g, 2, 3)
     add_edge!(g, 3, 4)
@@ -12,27 +34,14 @@ function main()
     add_edge!(g, 5, 6)
     add_edge!(g, 6, 7)
     add_edge!(g, 7, 8)
-    add_edge!(g, 8, 9)
-    add_edge!(g, 9, 10)
 
-    localdims = fill(2, length(vertices(g)))
+    localdims = fill(10, length(vertices(g)))
     f(v) = 1 / (1 + v' * v)
-    kwargs = (maxbonddim = 5, maxiter = 10)
-    tci = SimpleTCI{Float64}(f, localdims, g, [ones(Int, length(localdims))])
-    ranks, errors = optimize!(tci, f; kwargs...)
+    kwargs = (maxbonddim = 20, maxiter = 10)
+    tt, ranks, errors = crossinterpolate(Float64, f, localdims, g; kwargs...)
+    optimized_tt, ranks, errors = crossinterpolate_adaptivetree(Float64, f, localdims, g, 20; kwargs...)
 
-    # swap_2site!(g, 1 => 3)
-    tci_new = deepcopy(tci)
-
-    add_subtree!(tci_new.g, 6, NamedEdge(3 => 4)) # structural change
-
-    tci_new = SimpleTCI{Float64}(f, localdims, tci_new.g, [ones(Int, length(localdims))])
-    tci_new.converged_IJset = tci.converged_IJset
-    ranks, errors = optimize!(tci_new, f; kwargs...)
-
-    @show tci.pivoterrors
-    @show tci_new.pivoterrors
-    # TODO: Check the criterion between two structures.
+    evaluate_error_sampled(f, tt, optimized_tt, localdims, 1000)
     return 0
 end
 

@@ -83,41 +83,44 @@ function distanceedges(g::NamedGraph, edge::NamedEdge)::Dict{NamedEdge,Int}
     return distances
 end
 
-function swap_2site!(
-    g::NamedGraph,
-    vs::Pair{Int, Int},
-)
+function swap_2site(g_old::NamedGraph, vs::Pair{Int, Int})
+    g = deepcopy(g_old)
     p, q = vs
     p_neighbors = neighbors(g, p)
     q_neighbors = neighbors(g, q)
 
     rem_vertices!(g, [p, q])
-
     add_vertex!(g, p)
     add_vertex!(g, q)
 
     for p_i in p_neighbors
+        p_i == q && continue  # avoid self-loop
         add_edge!(g, NamedEdge(p_i => q))
     end
 
     for q_i in q_neighbors
-        add_edge!(g,  NamedEdge(q_i => p))
+        q_i == p && continue  # avoid self-loop
+        add_edge!(g, NamedEdge(q_i => p))
     end
 
-    p_neighbors = neighbors(g, p)
-    q_neighbors = neighbors(g, q)
+    if has_edge(g_old, NamedEdge(p => q))
+        add_edge!(g, NamedEdge(p => q))
+    end
+
     return g
 end
 
-function add_subtree!(
-    g::NamedGraph,
+function add_subtree(
+    g_old::NamedGraph,
     v::Int,
     edge::NamedEdge,
 )
+    g = deepcopy(g_old)
     p, q = separatevertices(g, edge)
     p_regions = subtreevertices(g, q => p)
     q_regions = subtreevertices(g, p => q)
     parent = v in p_regions ? q : p
     rem_edge!(g, edge)
     add_edge!(g, NamedEdge(parent => v))
+    return g
 end

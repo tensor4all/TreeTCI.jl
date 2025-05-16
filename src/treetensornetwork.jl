@@ -5,7 +5,7 @@ mutable struct TreeTensorNetwork{ValueType}
         g::NamedGraph,
         sitetensors::Vector{Pair{Array{ValueType},Vector{NamedEdge}}},
     ) where {ValueType}
-        !Graphs.is_cyclic(g) ||
+        !is_cyclic(g) ||
             error("TreeTensorNetwork is not supported for loopy tensor network.")
         ttntensors = Vector{IndexedArray}()
         for (i, (T, edges)) in enumerate(sitetensors)
@@ -86,6 +86,36 @@ function crossinterpolate(
 ) where {ValueType,N}
     tci = SimpleTCI{ValueType}(f, localdims, g, initialpivots)
     ranks, errors = optimize!(tci, f; kwargs...)
+    sitetensors = fillsitetensors(tci, f)
+    return TreeTensorNetwork(tci.g, sitetensors), ranks, errors
+end
+
+function crossinterpolate_adaptivetree(
+    ::Type{ValueType},
+    f,
+    localdims::Union{Vector{Int},NTuple{N,Int}},
+    g::NamedGraph,
+    nsearch:: Int = 10,
+    initialpivots::Vector{MultiIndex} = [ones(Int, length(localdims))];
+    kwargs...,
+) where {ValueType,N}
+
+    tci = SimpleTCI{ValueType}(f, localdims, g, initialpivots)
+    ranks, errors = optimize!(tci, f; kwargs...)
+
+    for i = 1:nsearch
+        # Generate a new structure
+        g_new = generate_new_structure(NewStructureLocalSwap(), tci)
+        tci_new = SimpleTCI{ValueType}(f, localdims, g_new, initialpivots)
+        tci_new.converged_IJset = tci.converged_IJset
+        ranks_new, errors_new = optimize!(tci_new, f; kwargs...)
+        if sum(errors_new) < sum(errors)
+            println("Structure is changed")
+            tci = tci_new
+            ranks = ranks_new
+            errors = errors_new
+        end
+    end
     sitetensors = fillsitetensors(tci, f)
     return TreeTensorNetwork(tci.g, sitetensors), ranks, errors
 end

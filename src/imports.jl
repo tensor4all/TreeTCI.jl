@@ -1,3 +1,4 @@
+using Random
 using Graphs: simplecycles_limited_length, has_edge, SimpleGraph, center, steiner_tree
 using NamedGraphs:
     NamedGraph,

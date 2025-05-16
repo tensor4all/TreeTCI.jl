@@ -88,9 +88,10 @@ function optimize!(
 
         if convergencecriterion(
             ranks,
-            errors;
-            maxbonddim=maxbonddim,
-            tolerance=tolerance
+            errors,
+            maxbonddim,
+            tolerance,
+            ncheckhistory
         )
             println("Converged at $(iter)th-sweep.")
             tci.converged_IJset = deepcopy(tci.IJset)
@@ -227,10 +228,10 @@ end
 
 function convergencecriterion(
     ranks::AbstractVector{Int},
-    errors::AbstractVector{Float64};
-    maxbonddim::Int = typemax(Int),
-    tolerance::Float64 = 1e-8,
-    ncheckhistory::Int = 2,
+    errors::AbstractVector{Float64},
+    maxbonddim::Int,
+    tolerance::Float64,
+    ncheckhistory::Int,
 )::Bool
     if length(errors) < ncheckhistory
         return false
