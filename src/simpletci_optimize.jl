@@ -93,9 +93,9 @@ function optimize!(
             tolerance=tolerance
         )
             println("Converged at $(iter)th-sweep.")
+            tci.converged_IJset = deepcopy(tci.IJset)
             break
         end
-
     end
 
     errornormalization = normalizeerror ? tci.maxsamplevalue : 1.0
