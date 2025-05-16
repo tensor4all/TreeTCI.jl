@@ -118,9 +118,6 @@ function addglobalpivots!(
     nothing
 end
 
-"""
-Return if site tensors are available
-"""
 
 function pushunique!(collection, item)
     if !(item in collection)

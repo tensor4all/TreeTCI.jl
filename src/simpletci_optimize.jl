@@ -48,7 +48,9 @@ function optimize!(
     loginterval::Int = 10,
     normalizeerror::Bool = true,
     ncheckhistory::Int = 3,
-) where {ValueType}
+    ) where {ValueType}
+
+    # Histories of properties for checking convergence.
     errors = Float64[]
     ranks = Int[]
 
@@ -62,7 +64,6 @@ function optimize!(
         )
     end
 
-    globalpivots = MultiIndex[]
     for iter = 1:maxiter
         errornormalization = normalizeerror ? tci.maxsamplevalue : 1.0
         abstol = tolerance * errornormalization
@@ -81,24 +82,20 @@ function optimize!(
             sweepstrategy = sweepstrategy,
             pivotstrategy = pivotstrategy,
         )
-        if verbosity > 0 && length(globalpivots) > 0 && mod(iter, loginterval) == 0
-            abserr = [abs(evaluate(tci, p) - f(p)) for p in globalpivots]
-            nrejections = length(abserr .> abstol)
-            if nrejections > 0
-                println(
-                    "  Rejected $(nrejections) global pivots added in the previous iteration, errors are $(abserr)",
-                )
-                flush(stdout)
-            end
-        end
-        push!(errors, last(pivoterror(tci)))
 
-        if verbosity > 1
-            println(
-                "  Walltime $(1e-9*(time_ns() - tstart)) sec: start searching global pivots",
-            )
-            flush(stdout)
+        push!(ranks, rank(tci))
+        push!(errors, pivoterror(tci))
+
+        if convergencecriterion(
+            ranks,
+            errors;
+            maxbonddim=maxbonddim,
+            tolerance=tolerance
+        )
+            println("Converged at $(iter)th-sweep.")
+            break
         end
+
     end
 
     errornormalization = normalizeerror ? tci.maxsamplevalue : 1.0
@@ -216,10 +213,31 @@ function updatepivoterror!(tci::SimpleTCI{T}, errors::AbstractVector{Float64}) w
     nothing
 end
 
+function rank(tci::SimpleTCI{ValueType}) where {ValueType}
+    return maximum(length(IJset) for IJset in values(tci.IJset))
+end
+
 function pivoterror(tci::SimpleTCI{T}) where {T}
     return maxbonderror(tci)
 end
 
 function maxbonderror(tci::SimpleTCI{T}) where {T}
     return maximum(values(tci.bonderrors))
+end
+
+function convergencecriterion(
+    ranks::AbstractVector{Int},
+    errors::AbstractVector{Float64};
+    maxbonddim::Int = typemax(Int),
+    tolerance::Float64 = 1e-8,
+    ncheckhistory::Int = 2,
+)::Bool
+    if length(errors) < ncheckhistory
+        return false
+    end
+    lastranks = last(ranks, ncheckhistory)
+    return (
+        all(last(errors, ncheckhistory) .< tolerance) &&
+        minimum(lastranks) == lastranks[end]
+    ) || all(lastranks .>= maxbonddim)
 end
