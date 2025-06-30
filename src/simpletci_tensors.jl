@@ -18,7 +18,7 @@
 function fillsitetensors(
     tci::SimpleTCI{ValueType},
     f;
-    center_vertex::Int = 0,
+    center_vertex::Int = 1,
 ) where {ValueType}
 
     sitetensors =

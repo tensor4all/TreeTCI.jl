@@ -93,7 +93,9 @@ function optimize!(
             tolerance,
             ncheckhistory
         )
-            println("Converged at $(iter)th-sweep.")
+            if verbosity > 1
+                println("Converged at $(iter)th-sweep.")
+            end
             tci.converged_IJset = deepcopy(tci.IJset)
             break
         end

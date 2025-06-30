@@ -10,9 +10,9 @@ struct NewStructureGlobalSwap <: AbstractNewStructureProposer end
 function generate_new_structure(
     ::NewStructureLocalSwap,
     tci::SimpleTCI{ValueType},
+    edge::NamedEdge,
 ) where {ValueType}
-    es = collect(edges(tci.g))
-    edge = rand(es)
+    edge in edges(tci.g) || error("Edge $edge not in graph")
     vs = src(edge) => dst(edge)
     return swap_2site(tci.g, vs)
 end
@@ -20,17 +20,9 @@ end
 function generate_new_structure(
     ::NewStructureGlobalSwap,
     tci::SimpleTCI{ValueType},
+    vs::Pair{Int, Int},
 ) where {ValueType}
-    vs = collect(vertices(tci.g))
-    es = Set(edges(tci.g))
-
-    all_pairs = Set((v1 => v2) for v1 in vs for v2 in vs if v1 < v2)
-
-    es_symmetric = Set(min(src(e), dst(e)) => max(src(e), dst(e)) for e in es)
-
-    candidate_pairs = setdiff(all_pairs, es_symmetric)
-
-    e = rand(candidate_pairs)
-    @show e
-    return swap_2site(tci.g, first(e) => last(e))
+    first(vs) in vertices(tci.g) || error("Vertex $first(vs) not in graph")
+    last(vs) in vertices(tci.g) || error("Vertex $last(vs) not in graph")
+    return swap_2site(tci.g, vs)
 end

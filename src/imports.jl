@@ -1,4 +1,5 @@
 using Random
+using Statistics
 using Graphs: simplecycles_limited_length, has_edge, SimpleGraph, center, steiner_tree
 using NamedGraphs:
     NamedGraph,
@@ -20,3 +21,5 @@ using NamedGraphs.GraphsExtensions:
     rem_edge!, add_edge!
 import TensorCrossInterpolation as TCI
 import SimpleTensorNetworks: TensorNetwork, IndexedArray, Index, complete_contraction, getindex, contract
+import ReinforcementLearning
+
