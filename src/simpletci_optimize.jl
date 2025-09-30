@@ -96,11 +96,11 @@ function optimize!(
             if verbosity > 1
                 println("Converged at $(iter)th-sweep.")
             end
-            tci.converged_IJset = deepcopy(tci.IJset)
             break
         end
     end
-
+    
+    tci.converged_IJset = deepcopy(tci.IJset)
     errornormalization = normalizeerror ? tci.maxsamplevalue : 1.0
     return ranks, errors ./ errornormalization
 end

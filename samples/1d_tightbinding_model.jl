@@ -40,11 +40,11 @@ function main()
     localdims = fill(2, nkx_bit + nm_bit)
     f(v) = gkb(v, nm_bit, nkx_bit; layout=:block)
     g = graph_TT(nkx_bit + nm_bit)
-    maxbonddim = 500
-    kwargs = (maxbonddim = maxbonddim, maxiter = 50, tolerance = 1e-10)
+    maxbonddim = 10
+    kwargs = (maxbonddim = maxbonddim, maxiter = 2, tolerance = 1e-10)
     # ttn, ranks, errors = crossinterpolate(ComplexF64, f, localdims, g; kwargs...)
     
-    ttn, ranks, errors = crossinterpolate_with_structuralsearch(ComplexF64, f, localdims, g, 1; kwargs...)
+    ttn, ranks, errors = crossinterpolate_with_structuralsearch(ComplexF64, f, localdims, g, 2; kwargs...)
     # ttn_tree, ranks, errors = crossinterpolate_with_structuralsearch(ComplexF64, f, localdims, g, 2; kwargs...)
     # ttn_ttnopt, ranks, errors = crossinterpolate_with_3site_swapping(ComplexF64, f, localdims, g; kwargs...)
     
