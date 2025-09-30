@@ -90,36 +90,6 @@ function crossinterpolate(
     return TreeTensorNetwork(tci.g, sitetensors), ranks, errors
 end
 
-function crossinterpolate_adaptivetree(
-    ::Type{ValueType},
-    f,
-    localdims::Union{Vector{Int},NTuple{N,Int}},
-    g::NamedGraph,
-    nsearch:: Int = 10,
-    initialpivots::Vector{MultiIndex} = [ones(Int, length(localdims))];
-    kwargs...,
-) where {ValueType,N}
-
-    tci = SimpleTCI{ValueType}(f, localdims, g, initialpivots)
-    ranks, errors = optimize!(tci, f; kwargs...)
-
-    for i = 1:nsearch
-        # Generate a new structure
-        g_new = generate_new_structure(NewStructureLocalSwap(), tci)
-        tci_new = SimpleTCI{ValueType}(f, localdims, g_new, initialpivots)
-        tci_new.converged_IJset = tci.converged_IJset
-        ranks_new, errors_new = optimize!(tci_new, f; kwargs...)
-        if sum(errors_new) < sum(errors)
-            println("Structure is changed")
-            tci = tci_new
-            ranks = ranks_new
-            errors = errors_new
-        end
-    end
-    sitetensors = fillsitetensors(tci, f)
-    return TreeTensorNetwork(tci.g, sitetensors), ranks, errors
-end
-
 function evaluate(
     ttn::TreeTensorNetwork{ValueType},
     indexset::Union{AbstractVector{Int},NTuple{N,Int}},
@@ -150,4 +120,19 @@ end
 # Add length method for TreeTensorNetwork
 function Base.length(ttn::TreeTensorNetwork)
     return length(vertices(ttn.tensornetwork.data_graph))
+end
+
+# Add method to get graph structure from TreeTensorNetwork
+function get_graph(ttn::TreeTensorNetwork)
+    return ttn.tensornetwork.data_graph
+end
+
+# Add method to get vertices from TreeTensorNetwork
+function get_vertices(ttn::TreeTensorNetwork)
+    return vertices(ttn.tensornetwork.data_graph)
+end
+
+# Add method to get edges from TreeTensorNetwork
+function get_edges(ttn::TreeTensorNetwork)
+    return edges(ttn.tensornetwork.data_graph)
 end

@@ -9,5 +9,5 @@ include("sweep2sitepathproposer.jl")
 include("simpletci_optimize.jl")
 include("simpletci_tensors.jl")
 include("treetensornetwork.jl")
-include("rl_structuralsearch.jl")
+include("structuralsearch.jl")
 end

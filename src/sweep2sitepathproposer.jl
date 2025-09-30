@@ -44,14 +44,14 @@ LocalAdjacent strategy that runs through within all indices of site tensor accor
 function generate_sweep2site_path(
     ::LocalAdjacentSweep2sitePathProposer,
     tci::SimpleTCI{ValueType};
-    origin_edge = undef,
+    origin_edge = nothing,
 ) where {ValueType}
     edge_path = Vector{NamedEdge}()
 
     n = length(vertices(tci.g))
 
     # choose the center bond id.
-    if origin_edge == undef
+    if origin_edge == nothing
         d = n
         for e in edges(tci.g)
             p, q = separatevertices(tci.g, e)

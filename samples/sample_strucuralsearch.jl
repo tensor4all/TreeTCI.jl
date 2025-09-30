@@ -1,12 +1,11 @@
 using Random
 using LinearAlgebra
-using TreeTCI: TCIEnv, SimpleTCI
+using TreeTCI: crossinterpolate_with_3site_swapping
 using Statistics
 using Distributions
 using NamedGraphs: NamedGraph, add_edge!, edges
 using QuanticsGrids
 const QG = QuanticsGrids
-using ReinforcementLearning
 
 
 function build_problem()
@@ -34,28 +33,15 @@ function main()
 
     fq, localdims, g = build_problem()
 
-    env = TCIEnv{Float64}(
-        fq,
-        localdims,
-        g;
-        maxstep = 100,
-        tol = 1e-8,
-        kwargs = (maxbonddim=10, maxiter=10, tolerance=1e-12)
-    )
+    kwargs = (
+            maxbonddim = 10,
+            tolerance = 1e-10,
+            maxiter = 100,
+        )
 
-    RLBase.reset!(env)
+    tci = crossinterpolate_with_3site_swapping(Float64, fq, localdims, g; kwargs...)
 
-    println("学習前 最大誤差: ", maximum(RLBase.state(env, nothing, nothing)))
-
-    println("学習開始...")
-    history = run(
-        RandomPolicy(),
-        env,
-        StopAfterNEpisodes(10)
-    )
-
-    # 結果確認
-    println("学習後 最大誤差: ", maximum(RLBase.state(env, nothing, nothing)))
+    return tci
 end
 
 main()
