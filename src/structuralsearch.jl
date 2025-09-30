@@ -55,13 +55,13 @@ function crossinterpolate_with_3site_swapping(
             candidates = filter(e -> distances[e] == max_distance, candidates)
 
             center_edge_ = first(candidates)
-            center_edge_id = edge2id[center_edge_]
-
+            
             p, q = separatevertices(tci.g, id2edge[previous_center_edge_id])
             v = center_edge_ in adjacentedges(tci.g, p) ? q : p #
             incomings = [edge for edge in adjacentedges(tci.g, v) if edge != id2edge[previous_center_edge_id]]
-
+            
             # Update flags - ID management
+            center_edge_id = edge2id[center_edge]
             if all(flags[edge2id[e]] == 1 for e in incomings) && center_edge_id != origin_edge_id
                 flags[center_edge_id] = 1
             end
@@ -81,7 +81,7 @@ function crossinterpolate_with_3site_swapping(
         end
         g_tmp = deepcopy(tci.g) # update g_tmp
     end
-    sitetensors = fillsitetensors(tci, f)
+    sitetensors, center_vertex = fillsitetensors(tci, f)
 
     ranks, errors = optimize!(tci, f; kwargs...)
     return TreeTensorNetwork(tci.g, sitetensors), ranks, errors
@@ -147,13 +147,13 @@ function crossinterpolate_with_structuralsearch(
             candidates = filter(e -> distances[e] == max_distance, candidates)
 
             center_edge_ = first(candidates)
-            center_edge_id = edge2id[center_edge_]
-
+            
             p, q = separatevertices(tci.g, center_edge)
             v = center_edge_ in adjacentedges(tci.g, p) ? q : p #
             incomings = [edge for edge in adjacentedges(tci.g, v) if edge != center_edge]
-
+            
             # Update flags - ID management
+            center_edge_id = edge2id[center_edge]
             if all(flags[edge2id[e]] == 1 for e in incomings) && center_edge_id != origin_edge_id
                 flags[center_edge_id] = 1
             end
@@ -315,7 +315,6 @@ function optimize_with_localmanipulation(
                 g_new = deepcopy(tci.g)
                 id2edge_new = deepcopy(id2edge)
                 rem_edge!(g_new, center_edge)
-
 
                 for v in children
                     # remove the old parent
