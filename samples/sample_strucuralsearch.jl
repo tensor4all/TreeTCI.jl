@@ -41,6 +41,8 @@ function main()
 
     tci = crossinterpolate_with_3site_swapping(Float64, fq, localdims, g; kwargs...)
 
+    ttn = TreeTensorNetwork(tci.g, tci.sitetensors)
+
     return tci
 end
 
