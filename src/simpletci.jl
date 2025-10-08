@@ -34,12 +34,12 @@ addglobalpivots!(tci, [[1,1,1], [2,1,1]])
 """
 mutable struct SimpleTCI{ValueType}
     IJset::Dict{SubTreeVertex,Vector{MultiIndex}}
+    converged_IJset::Dict{SubTreeVertex,Vector{MultiIndex}}
     localdims::Vector{Int}
     g::NamedGraph
     bonderrors::Dict{NamedEdge,Float64}
     pivoterrors::Vector{Float64}
     maxsamplevalue::Float64
-    IJset_history::Vector{Dict{SubTreeVertex,Vector{MultiIndex}}}
 
     function SimpleTCI{ValueType}(localdims::Vector{Int}, g::NamedGraph) where {ValueType}
         n = length(localdims)
@@ -47,20 +47,23 @@ mutable struct SimpleTCI{ValueType}
         n == length(vertices(g)) || error(
             "The number of vertices in the graph must be equal to the length of localdims.",
         )
-        !Graphs.is_cyclic(g) ||
+        !is_cyclic(g) ||
             error("SimpleTCI is not supported for loopy tensor network.")
 
         # assign the key for each bond
-        bonderrors = Dict(e => 0.0 for e in edges(g))
+        bonderrors = Dict(e => typemax(Float64) for e in edges(g))
+
+        !is_cyclic(g) ||
+            error("TreeTensorNetwork is not supported for loopy tensor network.")
 
         new{ValueType}(
             Dict{SubTreeVertex,Vector{MultiIndex}}(),               # IJset
+            Dict{SubTreeVertex,Vector{MultiIndex}}(),               # converged_IJset
             localdims,
             g,
             bonderrors,
             Float64[],
             0.0,                                                   # maxsamplevalue
-            Vector{Dict{SubTreeVertex,Vector{MultiIndex}}}(),       # IJset_history
         )
     end
 end
@@ -114,6 +117,7 @@ function addglobalpivots!(
 
     nothing
 end
+
 
 function pushunique!(collection, item)
     if !(item in collection)

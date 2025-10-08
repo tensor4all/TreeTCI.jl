@@ -5,7 +5,7 @@ mutable struct TreeTensorNetwork{ValueType}
         g::NamedGraph,
         sitetensors::Vector{Pair{Array{ValueType},Vector{NamedEdge}}},
     ) where {ValueType}
-        !Graphs.is_cyclic(g) ||
+        !is_cyclic(g) ||
             error("TreeTensorNetwork is not supported for loopy tensor network.")
         ttntensors = Vector{IndexedArray}()
         for (i, (T, edges)) in enumerate(sitetensors)
@@ -82,11 +82,12 @@ function crossinterpolate(
     localdims::Union{Vector{Int},NTuple{N,Int}},
     g::NamedGraph,
     initialpivots::Vector{MultiIndex} = [ones(Int, length(localdims))];
+    center_vertex::Int = 1,
     kwargs...,
 ) where {ValueType,N}
     tci = SimpleTCI{ValueType}(f, localdims, g, initialpivots)
     ranks, errors = optimize!(tci, f; kwargs...)
-    sitetensors = fillsitetensors(tci, f)
+    sitetensors = fillsitetensors(tci, f; center_vertex = center_vertex)
     return TreeTensorNetwork(tci.g, sitetensors), ranks, errors
 end
 
@@ -120,4 +121,19 @@ end
 # Add length method for TreeTensorNetwork
 function Base.length(ttn::TreeTensorNetwork)
     return length(vertices(ttn.tensornetwork.data_graph))
+end
+
+# Add method to get graph structure from TreeTensorNetwork
+function get_graph(ttn::TreeTensorNetwork)
+    return ttn.tensornetwork.data_graph
+end
+
+# Add method to get vertices from TreeTensorNetwork
+function get_vertices(ttn::TreeTensorNetwork)
+    return vertices(ttn.tensornetwork.data_graph)
+end
+
+# Add method to get edges from TreeTensorNetwork
+function get_edges(ttn::TreeTensorNetwork)
+    return edges(ttn.tensornetwork.data_graph)
 end

@@ -18,7 +18,7 @@
 function fillsitetensors(
     tci::SimpleTCI{ValueType},
     f;
-    center_vertex::Int = 0,
+    center_vertex::Int = 1,
 ) where {ValueType}
 
     sitetensors =
@@ -70,8 +70,8 @@ function sitetensor(
     return reshape(
         T,
         tci.localdims[site],
-        [length(tci.IJset[key]) for key in Inkeys]...,
-        [length(tci.IJset[key]) for key in Outkeys]...,
+        [length(tci.converged_IJset[key]) for key in Inkeys]...,
+        [length(tci.converged_IJset[key]) for key in Outkeys]...,
     )
 end
 
@@ -85,11 +85,11 @@ function sitetensor(
 ) where {ValueType}
     Inkeys, Outkeys = InOutkeys
     L = length(tci.localdims)
-    Pi1 = filltensor(ValueType, f, tci.localdims, tci.IJset, Inkeys, Outkeys, Val(1))
+    Pi1 = filltensor(ValueType, f, tci.localdims, tci.converged_IJset, Inkeys, Outkeys, Val(1))
     Pi1 = reshape(
         Pi1,
-        prod(vcat([tci.localdims[site]], [length(tci.IJset[key]) for key in Inkeys])),
-        prod([length(tci.IJset[key]) for key in Outkeys]),
+        prod(vcat([tci.localdims[site]], [length(tci.converged_IJset[key]) for key in Inkeys])),
+        prod([length(tci.converged_IJset[key]) for key in Outkeys]),
     )
     updatemaxsample!(tci, Pi1)
 
@@ -106,17 +106,17 @@ function sitetensor(
     end
 
     P = reshape(
-        filltensor(ValueType, f, tci.localdims, tci.IJset, [I1key], Outkeys, Val(0)),
-        length(tci.IJset[I1key]),
-        prod([length(tci.IJset[key]) for key in Outkeys]),
+        filltensor(ValueType, f, tci.localdims, tci.converged_IJset, [I1key], Outkeys, Val(0)),
+        length(tci.converged_IJset[I1key]),
+        prod([length(tci.converged_IJset[key]) for key in Outkeys]),
     )
-    length(tci.IJset[I1key]) == sum([length(tci.IJset[key]) for key in Outkeys]) || error("Pivot matrix at bond $(site) is not square!")
+    length(tci.converged_IJset[I1key]) == sum([length(tci.converged_IJset[key]) for key in Outkeys]) || error("Pivot matrix at bond $(site) is not square!")
     Tmat = transpose(transpose(P) \ transpose(Pi1))
     T = reshape(
         Tmat,
         tci.localdims[site],
-        [length(tci.IJset[key]) for key in Inkeys]...,
-        [length(tci.IJset[key]) for key in Outkeys]...,
+        [length(tci.converged_IJset[key]) for key in Inkeys]...,
+        [length(tci.converged_IJset[key]) for key in Outkeys]...,
     )
     return T
 end

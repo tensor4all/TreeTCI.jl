@@ -1,2 +1,3 @@
+./samples/
 Manifest.toml
-samples/
+.DS_Store

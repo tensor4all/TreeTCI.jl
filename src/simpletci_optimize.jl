@@ -48,7 +48,9 @@ function optimize!(
     loginterval::Int = 10,
     normalizeerror::Bool = true,
     ncheckhistory::Int = 3,
-) where {ValueType}
+    ) where {ValueType}
+
+    # Histories of properties for checking convergence.
     errors = Float64[]
     ranks = Int[]
 
@@ -62,7 +64,6 @@ function optimize!(
         )
     end
 
-    globalpivots = MultiIndex[]
     for iter = 1:maxiter
         errornormalization = normalizeerror ? tci.maxsamplevalue : 1.0
         abstol = tolerance * errornormalization
@@ -74,34 +75,32 @@ function optimize!(
 
         sweep2site!(
             tci,
-            f,
-            2;
+            f;
             abstol = abstol,
             maxbonddim = maxbonddim,
             verbosity = verbosity,
             sweepstrategy = sweepstrategy,
             pivotstrategy = pivotstrategy,
         )
-        if verbosity > 0 && length(globalpivots) > 0 && mod(iter, loginterval) == 0
-            abserr = [abs(evaluate(tci, p) - f(p)) for p in globalpivots]
-            nrejections = length(abserr .> abstol)
-            if nrejections > 0
-                println(
-                    "  Rejected $(nrejections) global pivots added in the previous iteration, errors are $(abserr)",
-                )
-                flush(stdout)
-            end
-        end
-        push!(errors, last(pivoterror(tci)))
 
-        if verbosity > 1
-            println(
-                "  Walltime $(1e-9*(time_ns() - tstart)) sec: start searching global pivots",
-            )
-            flush(stdout)
+        push!(ranks, rank(tci))
+        push!(errors, pivoterror(tci))
+
+        if convergencecriterion(
+            ranks,
+            errors,
+            maxbonddim,
+            tolerance,
+            ncheckhistory
+        )
+            if verbosity > 1
+                println("Converged at $(iter)th-sweep.")
+            end
+            break
         end
     end
-
+    
+    tci.converged_IJset = deepcopy(tci.IJset)
     errornormalization = normalizeerror ? tci.maxsamplevalue : 1.0
     return ranks, errors ./ errornormalization
 end
@@ -111,8 +110,7 @@ end
 """
 function sweep2site!(
     tci::SimpleTCI{ValueType},
-    f,
-    niter::Int;
+    f;
     abstol::Float64 = 1e-8,
     maxbonddim::Int = typemax(Int),
     sweepstrategy::AbstractSweep2sitePathProposer = DefaultSweep2sitePathProposer(),
@@ -122,24 +120,18 @@ function sweep2site!(
 
     edge_path = generate_sweep2site_path(sweepstrategy, tci)
 
-    for _ = 1:niter
-        extraIJset = Dict(key => MultiIndex[] for key in keys(tci.IJset))
+    flushpivoterror!(tci)
 
-        push!(tci.IJset_history, deepcopy(tci.IJset))
-
-        flushpivoterror!(tci)
-
-        for edge in edge_path
-            updatepivots!(
-                tci,
-                edge,
-                f;
-                abstol = abstol,
-                maxbonddim = maxbonddim,
-                pivotstrategy = pivotstrategy,
-                verbosity = verbosity,
-            )
-        end
+    for edge in edge_path
+        updatepivots!(
+            tci,
+            edge,
+            f;
+            abstol = abstol,
+            maxbonddim = maxbonddim,
+            pivotstrategy = pivotstrategy,
+            verbosity = verbosity,
+        )
     end
 
     nothing
@@ -224,10 +216,31 @@ function updatepivoterror!(tci::SimpleTCI{T}, errors::AbstractVector{Float64}) w
     nothing
 end
 
+function rank(tci::SimpleTCI{ValueType}) where {ValueType}
+    return maximum(length(IJset) for IJset in values(tci.IJset))
+end
+
 function pivoterror(tci::SimpleTCI{T}) where {T}
     return maxbonderror(tci)
 end
 
 function maxbonderror(tci::SimpleTCI{T}) where {T}
     return maximum(values(tci.bonderrors))
+end
+
+function convergencecriterion(
+    ranks::AbstractVector{Int},
+    errors::AbstractVector{Float64},
+    maxbonddim::Int,
+    tolerance::Float64,
+    ncheckhistory::Int,
+)::Bool
+    if length(errors) < ncheckhistory
+        return false
+    end
+    lastranks = last(ranks, ncheckhistory)
+    return (
+        all(last(errors, ncheckhistory) .< tolerance) &&
+        minimum(lastranks) == lastranks[end]
+    ) || all(lastranks .>= maxbonddim)
 end
