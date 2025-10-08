@@ -1,187 +1,133 @@
-using TreeTCI: TreeTensorNetwork
-using SimpleTensorNetworks: permute, IndexedArray, hascommondindices
-using LinearAlgebra
 using ITensors
+using ITensorNetworks
+const ITN = ITensorNetworks
+
+function entanglements_entropy(s)
+    s = diag(s)
+    s2 = s.^2
+    s2 = s2 / sum(s2)
+    s2 = s2[s2 .> 0.0]
+    return -sum(s2 .* log.(s2))
+end
 
 function ttnopt(
-    ttn::TreeTensorNetwork{V};
-    maxbonddim::Int = typemax(Int),
-    tolerance::Float64 = 0.0,
-    max_degree::Int = 2,
-    nsweeps::Int = 10,
-    T0::Float64 = 0.0,
-    
-) where {V}
-
-    tn = ttn.tensornetwork.data_graph
-    tn_g = tn.underlying_graph
-    center_vertex = ttn.center_vertex
-    neighbor_vertices = neighbors(tn_g, center_vertex)
-    origin_edge = NamedEdge(min(center_vertex, first(neighbor_vertices)) => max(center_vertex, first(neighbor_vertices)))
-    
-    id2edge = collect(edges(tn_g))
-    edge2id = Dict{NamedEdge,Int}(e => i for (i,e) in enumerate(id2edge))
-    center_edge = origin_edge
-    origin_edge_id = edge2id[origin_edge]
-
-    for i = 1:nsweeps
-        @show i
-        # Init flags
-        flags = Dict(k => 0 for k in 1:length(id2edge))
-        while true
-            ttn, center_edge, id2edge, edge2id, flags, finish = optimize_structure(ttn, center_edge, id2edge, edge2id, flags, origin_edge_id, i, nsweeps; max_degree = max_degree, T0 = T0, maxbonddim = maxbonddim, tolerance = tolerance)
-            @show center_edge
-            if finish
-                @show "converged"
-                break
-            end
-        end
-    end
-
-
-    return 0
-end
-
-function optimize_structure(
-    ttn,
-    center_edge,
-    id2edge,
-    edge2id,
-    flags,
-    origin_edge_id,
-    nowstep::Int,
-    nsweeps::Int;
+    ttn::TreeTensorNetwork,
+    nsweeps::Int=50;
+    ortho_vertex::Int=1,
     max_degree::Int = 1,
     T0::Float64 = 0.0,
-    maxbonddim::Int = typemax(Int),
-    tolerance::Float64 = 0.0,
 )
-    tn = ttn.tensornetwork.data_graph
-    tn_g = tn.underlying_graph
-    p, q = separatevertices(tn_g, center_edge)
-    subI = filter(x->x!=q, neighbors(tn_g, p))
-    subJ = filter(x->x!=p, neighbors(tn_g, q))
-    children = vcat(subI, subJ)
-    ψ = contract(tn[p], tn[q])
+    ttn = convert_ITensorNetwork(ttn, ortho_vertex)
+    normalize!(ttn)
+    neighbor_vertices = neighbors(ttn, ortho_vertex)
+    next_vertex = first(neighbor_vertices)
+    origin_edge = NamedEdge(min(ortho_vertex, next_vertex) => max(ortho_vertex, next_vertex))
+    center_edge = origin_edge
 
-    n = length(children)
-    limit = max_degree
+    flag_indices = [tags(first(ITN.linkinds(ttn, e))) for e in edges(ttn)]
+    origin_flag_index = tags(first(ITN.linkinds(ttn, origin_edge)))
 
-    ψ_inds = ψ.indices
-    s1 = ψ_inds[1]
-    s2 = ψ_inds[2]
-    other_inds = ψ_inds[3:end]
+    edge_list = [[src(e), dst(e)] for e in edges(ttn)]
+
+    original_entanglements = Dict()
+    final_entanglements = Dict()
+
+    for sweep = 0:nsweeps
+        flags = Dict(flag_indices[i] => 0 for i in 1:length(flag_indices))
+        final_entanglements = Dict()
+        while true
+            g = ttn.tensornetwork.data_graph.underlying_graph
+            p, q = separatevertices(g, center_edge)
+            linkind = first(ITN.linkinds(ttn, center_edge))
+            maxbonddim = dim(linkind)
+            tag = tags(linkind)
+            siteindices = [ITN.siteinds(ttn, p); ITN.siteinds(ttn, q)]
+
+            ψ = ITensors.contract(ttn[p], ttn[q])
+            if sweep == 0
+                leftinds = filter(ind -> ind != ITN.siteinds(ttn, p), inds(ttn[p]))
+                _, s, _ = ITensors.svd(ψ, leftinds; cutoff = 0.0)
+                ee = entanglements_entropy(s)
+                original_entanglements[src(center_edge), dst(center_edge)] = ee
+            else
+                entanglements, leftinds_list = propose_structure(ψ, siteindices, max_degree)
+                index = decide_structure(entanglements, sweep, nsweeps; T0 = T0)
+                leftinds = leftinds_list[index]
+                ee = entanglements[index]
+                final_entanglements[src(center_edge), dst(center_edge)] = ee
+            end
+
+            u, s, v = ITensors.svd(ψ, leftinds; maxdim = maxbonddim, lefttags = tag, righttags = tag)
+            ttn[p] = u
+            ttn[q] = v * s
+
+            # update next center edge
+            g = ttn.tensornetwork.data_graph.underlying_graph
+
+            candidates = candidateedges(g, center_edge)
+            candidates = [e for e in candidates if flags[tags(first(ITN.linkinds(ttn, e)))] == 0]
+
+            # If candidates is empty, exit while loop
+            if isempty(candidates)
+                break
+            end
+
+            same_index_edge = first([e for e in edges(ttn) if tags(first(ITN.linkinds(ttn, e))) == origin_flag_index])
+            distances = distanceedges(g, same_index_edge)
+            max_distance = maximum(distances[e] for e in candidates)
+            candidates = filter(e -> distances[e] == max_distance, candidates)
+            center_edge_ = first(candidates)
+            prev_vertex, next_vertex = center_edge_ in adjacentedges(g, p) ? (q, p) : (p, q) #
+            incomings = [first(ITN.linkinds(ttn, edge)) for edge in adjacentedges(g, prev_vertex) if edge != center_edge]
+            center_flag_index = tags(first(ITN.linkinds(ttn, center_edge)))
+
+            if all(flags[tags(e)] == 1 for e in incomings) && center_flag_index != origin_flag_index
+                flags[center_flag_index] = 1
+            end
+
+            if next_vertex == p
+                ttn[next_vertex] = u * s
+                ttn[prev_vertex] = v
+            end
+            center_edge = center_edge_
+
+        end
+
+        new_edge_list = [[src(e), dst(e)] for e in edges(ttn)]
+        if sweep > 1 && Set(edge_list) == Set(new_edge_list)
+            break
+        end
+        edge_list = new_edge_list
+    end
+    return ttn.tensornetwork.data_graph.underlying_graph, original_entanglements, final_entanglements
+end
+
+function propose_structure(ψ, siteindices, max_degree::Int)
+    s1_ind = siteindices[1]
+    s2_ind = siteindices[2]
+
+    remain_inds = filter(ind -> ind != s1_ind && ind != s2_ind, inds(ψ))
+    n = length(remain_inds)
 
     entanglements = Float64[]
-    virtual_indices_pairs = []
-    gs = []
-    id2edges = []
-
-    for k in 0:n
-        if k <= limit && (n-k) <= limit
-            for left in combinations(children, k)
-                leftset = Set(left)
-
-                # split virtual bonds into left and right
-                left_bonds = other_inds[1:k]
-                right_bonds = other_inds[(k+1):end]
-
-                # left: s1 + left_bonds, right: s2 + right_bonds
-                left_indices = [s1; left_bonds]
-                right_indices = [s2; right_bonds]
-
-                ψ_permuted = permute(ψ, [left_indices; right_indices])
-
-                # size of left and right
-                left_size = prod([ind.dim for ind in left_indices])
-                right_size = prod([ind.dim for ind in right_indices])
-
-                # reshape and SVD
-                reshaped = reshape(ψ_permuted.data, left_size, right_size)
-                _, S, _ = svd(reshaped)
-
-                S2 = S.^2
-                S2 = S2 / sum(S2)
-                S2 = S2[S2 .> 0.0]
-                ee = -sum(S2 .* log.(S2))
-
-                # graphs
+    leftinds_list = []
+    for k = 0:n
+        if k <= max_degree && (n-k) <= max_degree
+            for left in combinations(remain_inds, k)
+                leftinds = [s1_ind; left]
+                _, s, _ = svd(ψ, leftinds, cutoff = 0.0)
+                ee = entanglements_entropy(s)
                 push!(entanglements, ee)
-                push!(virtual_indices_pairs, (left_indices, right_indices))
-
-                g_new = deepcopy(tn_g)
-                id2edge_new = deepcopy(id2edge)
-                rem_edge!(g_new, center_edge)
-
-                for v in children
-                    # remove the old parent
-                    old_parent = (v in subI ? p : q)
-
-                    e_old = old_parent < v ? NamedEdge(old_parent=>v) : NamedEdge(v=>old_parent)
-                    e_old_id = edge2id[e_old]
-
-                    rem_edge!(g_new, e_old)
-                    # connect the new parent
-                    new_parent = (v in leftset ? p : q)
-                    e_new = new_parent < v ? NamedEdge(new_parent=>v) : NamedEdge(v=>new_parent)
-
-                    id2edge_new[e_old_id] = e_new
-                    add_edge!(g_new, e_new)
-                end
-                add_edge!(g_new, center_edge)
-
-                push!(gs, g_new)
-                push!(id2edges, id2edge_new)
+                push!(leftinds_list, leftinds)
             end
         end
     end
-
-    index = propose_structure(entanglements, nowstep, nsweeps; T0 = T0)
-
-    edge2id = Dict(e => i for (i, e) in enumerate(id2edge))
-
-    tn_g = gs[index]
-    id2edge = id2edges[index]
-    edge2id = Dict(e => i for (i, e) in enumerate(id2edge))
-
-    # update next center edge
-    candidates = candidateedges(tn_g, center_edge)
-    candidates = [e for e in candidates if flags[edge2id[e]] == 0]
-
-    # If candidates is empty, exit while loop
-    if isempty(candidates)
-        return tn, tn_g, center_edge, id2edge, edge2id, flags, true
-    end
-
-    distances = distanceedges(tn_g, id2edge[origin_edge_id])
-    max_distance = maximum(distances[e] for e in candidates)
-    candidates = filter(e -> distances[e] == max_distance, candidates)
-
-    center_edge_ = first(candidates)
-    center_edge_id = edge2id[center_edge_]
-
-    p, q = separatevertices(tn_g, center_edge)
-    v = center_edge_ in adjacentedges(tn_g, p) ? q : p #
-    incomings = [edge for edge in adjacentedges(tn_g, v) if edge != center_edge]
-
-    # Update flags - ID management
-    if !isempty(incomings) && all(flags[edge2id[e]] == 1 for e in incomings) && center_edge_id != origin_edge_id
-        flags[center_edge_id] = 1
-    end
-
-    U, V = update_tn(ψ, v, first(virtual_indices_pairs[index]), last(virtual_indices_pairs[index]); maxbonddim = maxbonddim, tolerance = tolerance)
-    ttn = TreeTensorNetwork(tn_g, sitetensors, ttn.center_vertex)
-
-    # update center edge
-    center_edge = center_edge_
-    
-    return ttn, center_edge, id2edge, edge2id, flags, false
+    return entanglements, leftinds_list
 end
 
-function propose_structure(entanglements::Vector{Float64}, nowstep::Int, nsteps::Int; T0::Float64 = 0.0)
-    index = 0
+function decide_structure(entanglements, nowsweep, nsweeps; T0::Float64 = 0.0)
     if T0 > 0.0
-        T = T0 * (nsteps - nowstep) / nsteps
+        T = T0 * nowsweep / nsweeps
         p = exp.(-entanglements / T)
         p = p / sum(p)
         index = sample(1:length(entanglements), Weights(p))
@@ -191,33 +137,55 @@ function propose_structure(entanglements::Vector{Float64}, nowstep::Int, nsteps:
     return index
 end
 
-function update_tn(
-    ψ,
-    next_vertex,
-    left_indices,
-    right_indices;
-    maxbonddim::Int = typemax(Int),
-    tolerance::Float64 = 0.0,
-)
-    ψ_permuted = permute(ψ, [left_indices; right_indices])
-
-    # TODO: SimpleTensorNetworks SVD
-    # ここで left/right 側の結合次元を出してSVD → u,s,v を返す処理へ発展
-    left_inds = [ITensors.Index(left_indices[i].dim) for i in 1:length(left_indices)]
-    right_inds = [ITensors.Index(right_indices[i].dim) for i in 1:length(right_indices)]
-    ψ_permuted = ITensors.ITensor(ψ_permuted.data, vcat(left_inds, right_inds)...)
-    u_resolve = left_indices[1].name == "s$(next_vertex)"
-    v_resolve = right_indices[1].name == "s$(next_vertex)"
-    u, s, v = svd(ψ_permuted, left_inds; maxdim = maxbonddim, cutoff = tolerance)
-    d = first(size(s))
-    if u_resolve
-        u = u * s
-    elseif v_resolve
-        v = v * s
+function convert_ITensorNetwork(ttn::TreeTensorNetwork, ortho_vertex::Int=1)
+    g = ttn.tensornetwork.data_graph.underlying_graph
+    siteinds = []
+    edge_inds = Dict{NamedEdge, ITensors.Index}()
+    itensors = ITensors.ITensor[]
+    for v in vertices(g)
+        tns = ttn.tensornetwork.data_graph[v]
+        tns_data = tns.data
+        tns_inds = tns.indices
+        # Add site index
+        site = ITensors.Index(tns_inds[1].dim; tags="s$v")
+        push!(siteinds, site)
+        # Add edge indices
+        inds = []
+        for ind in tns_inds[2:end]
+            tag = ind.name
+            parts = split(tag, "=>")
+            src, dst = parse(Int, parts[1]), parse(Int, parts[2])
+            e = NamedEdge(src, dst)
+            # Get edge ID from mapping
+            edge_id = findfirst(edge -> edge == e, collect(edges(g)))
+            ind = get!(edge_inds, NamedEdge(src, dst), ITensors.Index(ind.dim; tags="e$edge_id"))
+            push!(inds, ind)
+        end
+        # Add itensor
+        itensor = ITensors.ITensor(tns_data, [site; inds])
+        push!(itensors, itensor)
     end
 
-    u = Array(u, ITensors.inds(u)...)
-    v = Array(v, ITensors.inds(v)...)
+    # ortho normalize
+    state = namedgraph_dijkstra_shortest_paths(g, ortho_vertex)
+    distances = state.dists
+    max_distance = maximum(distances[v] for v in vertices(g))
+    for d = max_distance:-1:1
+        children = filter(v -> distances[v] == d, vertices(g))
+        for child in children
+            parent = state.parents[child]
+            ψ = ITensors.contract(itensors[parent], itensors[child])
+            virtualindex = commonind(itensors[parent], itensors[child])
+            child_inds = inds(itensors[child])
+            left_inds = filter(i -> i != virtualindex, child_inds)
+            u, s, v = svd(ψ, left_inds, maxdim = dim(virtualindex); lefttags=tags(virtualindex), righttags=tags(virtualindex))
+            v = v * s
+            itensors[child] = u
+            itensors[parent] = v
+        end
+    end
 
-    return u, v
+    ttn = ITN.ITensorNetwork(itensors)
+    ttn = ITN.TreeTensorNetwork(ttn, ortho_region=vertices(ttn)[ortho_vertex])
+    return ttn
 end

@@ -1,12 +1,18 @@
 using Random
 using LinearAlgebra
 using TreeTCI: crossinterpolate, crossinterpolate_with_structuralsearch, crossinterpolate_with_3site_swapping
-using NamedGraphs: NamedGraph, add_edge!
+using NamedGraphs: NamedGraph, add_edge!, edges, src, dst
 using QuanticsGrids
 const QG = QuanticsGrids
 using SparseIR
+using ITensorNetworks
+using TreeTCI: ttnopt
+const ITN = ITensorNetworks
+using ITensors
+using NPZ
 include("utils.jl")
 include("graphs.jl")
+
 
 ε(k) = 2*cos(k) + cos(5*k) + 2*cos(20*k)
 
@@ -17,7 +23,7 @@ gk(m::Int, kx::Float64; β::Float64=10.0) = begin
     return 1 / (iν - ε(kx))
 end
 
-function gkb(b::Vector{Int}, n_m::Int, n_kx::Int; β::Float64=10.0, layout::Symbol=:block)
+function gkb(b::Vector{Int}, n_m::Int, n_kx::Int; mu::Float64=0.0, β::Float64=10.0, layout::Symbol=:block)
     @assert length(b) == n_m + n_kx
     parts = split_bits(b; group_bits=[n_m, n_kx], layout=layout)
     mb, kxb = parts
@@ -31,36 +37,28 @@ function gkb(b::Vector{Int}, n_m::Int, n_kx::Int; β::Float64=10.0, layout::Symb
     @assert ikx ≤ Nkx
     kx = 2π * (ikx - 1)/Nkx
     m = (im - 1)
-    return gk(m, kx)
+    return gk(m, kx; mu=mu, β=β)
 end
 
 function main()
     nkx_bit = 10
     nm_bit = 10
     localdims = fill(2, nkx_bit + nm_bit)
-    f(v) = gkb(v, nm_bit, nkx_bit; layout=:block)
+    f(v) = gkb(v, nm_bit, nkx_bit; layout=:interleave)
     g = graph_TT(nkx_bit + nm_bit)
-    maxbonddim = 10
-    kwargs = (maxbonddim = maxbonddim, maxiter = 2, tolerance = 1e-10)
-    # ttn, ranks, errors = crossinterpolate(ComplexF64, f, localdims, g; kwargs...)
-    
-    ttn, ranks, errors = crossinterpolate_with_structuralsearch(ComplexF64, f, localdims, g, 2; kwargs...)
-    # ttn_tree, ranks, errors = crossinterpolate_with_structuralsearch(ComplexF64, f, localdims, g, 2; kwargs...)
-    # ttn_ttnopt, ranks, errors = crossinterpolate_with_3site_swapping(ComplexF64, f, localdims, g; kwargs...)
-    
-    # @show ttn.data_graph.underlying_graph
-    # @show ttn_2site_swapping.data_graph.underlying_graph
-    # @show ttn_3site_swapping.data_graph.underlying_graph
-    
-    # for _ in 1:10
-    #     test_input = rand([1,2], nkx_bit + nm_bit)
-    #     result = ttn(test_input)
-    #     expected = f(test_input)
-    # end
+    maxbonddim = 200
+    kwargs = (maxbonddim = maxbonddim, maxiter = 100, tolerance = 1e-13)
+    center_vertex = (nkx_bit + nm_bit) ÷ 2
+    # center_vertex = 1
 
-    @show ttn.tensornetwork.data_graph.underlying_graph
+    ttn, ranks, errors = crossinterpolate(ComplexF64, f, localdims, g; center_vertex = center_vertex, kwargs...)
     @show last(ranks)
-    @show last(errors)
+
+
+    g_tmp, original_entanglements, entanglements = ttnopt(ttn; ortho_vertex = center_vertex, max_degree = 2)
+    ttn_, ranks, errors = crossinterpolate(ComplexF64, f, localdims, g_tmp; center_vertex = center_vertex, kwargs...)
+    @show last(ranks)
+
     return 0
 end
 

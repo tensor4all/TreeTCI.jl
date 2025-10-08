@@ -10,4 +10,5 @@ include("simpletci_optimize.jl")
 include("simpletci_tensors.jl")
 include("treetensornetwork.jl")
 include("structuralsearch.jl")
+include("ttnopt.jl")
 end

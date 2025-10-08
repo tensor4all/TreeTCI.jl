@@ -82,11 +82,12 @@ function crossinterpolate(
     localdims::Union{Vector{Int},NTuple{N,Int}},
     g::NamedGraph,
     initialpivots::Vector{MultiIndex} = [ones(Int, length(localdims))];
+    center_vertex::Int = 1,
     kwargs...,
 ) where {ValueType,N}
     tci = SimpleTCI{ValueType}(f, localdims, g, initialpivots)
     ranks, errors = optimize!(tci, f; kwargs...)
-    sitetensors = fillsitetensors(tci, f)
+    sitetensors = fillsitetensors(tci, f; center_vertex = center_vertex)
     return TreeTensorNetwork(tci.g, sitetensors), ranks, errors
 end
 

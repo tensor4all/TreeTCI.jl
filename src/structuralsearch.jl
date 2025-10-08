@@ -41,6 +41,10 @@ function crossinterpolate_with_3site_swapping(
         # Init flags
         flags = Dict(k => 0 for k in 1:length(id2edge))
         while true
+
+            tci, id2edge = optimize_with_3site_swapping(tci, f, initialpivots, id2edge[center_edge_id], id2edge[previous_center_edge_id], id2edge, edge2id; kwargs...)
+            edge2id = Dict(e => i for (i, e) in enumerate(id2edge))
+
             # update next center edge
             candidates = candidateedges(tci.g, id2edge[previous_center_edge_id])
             candidates = [e for e in candidates if flags[edge2id[e]] == 0]
