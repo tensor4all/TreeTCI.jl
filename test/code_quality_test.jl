@@ -18,7 +18,7 @@ end
 
     if VERSION >= v"1.9"
         @testset "Code linting (JET.jl)" begin
-            JET.test_package(TreeTCI; target_defined_modules = true)
+            JET.test_package(TreeTCI; target_modules = (TreeTCI,))
         end
     end
 end
