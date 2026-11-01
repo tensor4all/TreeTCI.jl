@@ -54,6 +54,9 @@ jobs:
       - uses: codecov/codecov-action@v3
   docs:
     name: Documentation
+    # workflow-level `contents: read` (for julia-actions/cache) blocks the gh-pages push
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
