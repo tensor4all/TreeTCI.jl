@@ -179,10 +179,10 @@ function updatepivots!(
 
     t3 = time_ns()
     if verbosity > 2
-        x, y = length(combinedIJset[Ikey]),
-        length(combinedIJset[Jkey]),
+        x = length(combinedIJset[Ikey])
+        y = length(combinedIJset[Jkey])
         println(
-            "    Computing Pi ($x x $y) at bond $b: $(1e-9*(t2-t1)) sec, LU: $(1e-9*(t3-t2)) sec",
+            "    Computing Pi ($x x $y) at bond $edge: $(1e-9*(t2-t1)) sec, LU: $(1e-9*(t3-t2)) sec",
         )
     end
 

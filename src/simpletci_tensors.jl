@@ -99,10 +99,12 @@ function sitetensor(
     end
 
     p, q = separatevertices(tci.g, edge)
-    if p == site
-        I1key = subtreevertices(tci.g, q => p)
+    I1key = if p == site
+        subtreevertices(tci.g, q => p)
     elseif q == site
-        I1key = subtreevertices(tci.g, p => q)
+        subtreevertices(tci.g, p => q)
+    else
+        error("site $(site) is not incident to edge $(edge)")
     end
 
     P = reshape(
