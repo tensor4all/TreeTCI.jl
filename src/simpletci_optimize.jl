@@ -28,12 +28,15 @@ Optimize the SimpleTCI instance by iteratively updating pivots.
 - `ncheckhistory::Int = 3`: Number of history steps to check
 
 # Returns
-- `ranks`: Vector of ranks at each iteration
-- `errors`: Vector of normalized errors at each iteration
+- `ranks`: Vector of ranks (largest bond dimension) at each executed iteration
+- `errors`: Vector of normalized errors at each executed iteration
 
 # Note
 - The SimpleTCI object will be modified in place.
 - Set `tolerance` to be > 0 or `maxbonddim` to some reasonable value. Otherwise, convergence is not reachable.
+- The loop stops when `TCI.convergencecriterion` holds: the last `ncheckhistory` errors are below the
+  tolerance, the ranks have saturated, and every bond has reached `maxbonddim`. Both returned vectors
+  therefore have as many entries as executed iterations, which can be fewer than `maxiter`.
 
 """
 function optimize!(
@@ -50,7 +53,9 @@ function optimize!(
     ncheckhistory::Int = 3,
 ) where {ValueType}
     errors = Float64[]
+    normfactors = Float64[]
     ranks = Int[]
+    ngpivots = Int[]
 
     tstart = time_ns()
 
@@ -92,7 +97,21 @@ function optimize!(
                 flush(stdout)
             end
         end
+        # Both vectors stay on a scale that can be compared with `abstol`: `errors` holds the raw
+        # pivot errors the sweeps produced, and `abstol` is `tolerance` in the same units. Dividing
+        # by the `maxsamplevalue` of *this* iteration is deferred to the return value, so a
+        # `maxsamplevalue` that grows during the run cannot rescale the history's prefix either;
+        # normalizing each entry by the final value (as this function used to) mixed two scales in
+        # one vector (#17).
         push!(errors, last(pivoterror(tci)))
+        push!(normfactors, errornormalization)
+        push!(ranks, maxrank(tci))
+        # No global pivot search runs in this loop; the criterion reads the count positionally.
+        push!(ngpivots, 0)
+
+        if TCI.convergencecriterion(ranks, errors, ngpivots, abstol, maxbonddim, ncheckhistory)
+            break
+        end
 
         if verbosity > 1
             println(
@@ -102,8 +121,17 @@ function optimize!(
         end
     end
 
-    errornormalization = normalizeerror ? tci.maxsamplevalue : 1.0
-    return ranks, errors ./ errornormalization
+    return ranks, errors ./ normfactors
+end
+
+"""
+    maxrank(tci::SimpleTCI)
+
+Largest bond dimension of `tci`, i.e. the largest number of pivot multi-indices carried by a bond.
+"""
+function maxrank(tci::SimpleTCI)
+    isempty(tci.IJset) && return 0
+    return maximum(length, values(tci.IJset))
 end
 
 """
